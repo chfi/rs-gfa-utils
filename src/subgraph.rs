@@ -1,55 +1,42 @@
+#[allow(dead_code)]
 use gfa::gfa::GFA;
 
 use std::collections::HashSet;
 
-// Build a new GFA consisting of subgraphs of the given GFA
+macro_rules! filtered {
+    ($coll:expr, $pred:expr) => {
+        $coll.iter().filter($pred).cloned().collect();
+    };
+}
+
+/// Build a new GFA consisting of subgraphs of the given GFA
 pub fn paths_new_subgraph(gfa: &GFA, paths: &[String]) -> GFA {
     let path_names: HashSet<&String> = paths.iter().collect();
+
     // Filter out the paths in the GFA we don't want
-    let paths: Vec<_> = gfa
-        .paths
-        .iter()
-        .filter(|p| path_names.contains(&p.path_name))
-        .cloned()
-        .collect();
+    let paths: Vec<_> =
+        filtered!(gfa.paths, |p| path_names.contains(&p.path_name));
 
     // Set of the segments in the paths we're keeping
-    let mut segment_names: HashSet<&str> = HashSet::new();
-
-    paths.iter().for_each(|path| {
-        path.segment_names.iter().for_each(|(seg, _)| {
-            segment_names.insert(seg);
-        });
-    });
+    let segment_names: HashSet<&str> = paths
+        .iter()
+        .flat_map(|path| path.segment_names.iter().map(|(seg, _)| seg.as_str()))
+        .collect();
 
     // Filter out the segments in the GFA we don't want
-    let segments: Vec<_> = gfa
-        .segments
-        .iter()
-        .filter(|s| segment_names.contains(s.name.as_str()))
-        .cloned()
-        .collect();
+    let segments =
+        filtered!(gfa.segments, |s| segment_names.contains(s.name.as_str()));
 
     // Filter out the links in the GFA we don't want
-    let links: Vec<_> = gfa
-        .links
-        .iter()
-        .filter(|l| {
-            segment_names.contains(l.from_segment.as_str())
-                && segment_names.contains(l.to_segment.as_str())
-        })
-        .cloned()
-        .collect();
+    let links = filtered!(&gfa.links, |l| {
+        segment_names.contains(l.from_segment.as_str())
+            && segment_names.contains(l.to_segment.as_str())
+    });
 
-    let containments: Vec<_> = gfa
-        .containments
-        .iter()
-        .filter(|l| {
-            segment_names.contains(l.container_name.as_str())
-                && segment_names.contains(l.contained_name.as_str())
-        })
-        .cloned()
-        .collect();
+    let containments = filtered!(&gfa.containments, |l| {
+        segment_names.contains(l.container_name.as_str())
+            && segment_names.contains(l.contained_name.as_str())
+    });
 
     GFA {
         segments,
@@ -59,50 +46,39 @@ pub fn paths_new_subgraph(gfa: &GFA, paths: &[String]) -> GFA {
     }
 }
 
+macro_rules! filtered_into {
+    ($coll:expr, $pred:expr) => {
+        $coll.into_iter().filter($pred).collect()
+    };
+}
+
 // Consume the given GFA to create the subgraph GFA
 pub fn paths_subgraph(gfa: GFA, paths: &[String]) -> GFA {
     let path_names: HashSet<&String> = paths.iter().collect();
     // Filter out the paths in the GFA we don't want
-    let paths: Vec<_> = gfa
-        .paths
-        .into_iter()
-        .filter(|p| path_names.contains(&p.path_name))
-        .collect();
+    let paths: Vec<_> =
+        filtered_into!(gfa.paths, |p| path_names.contains(&p.path_name));
 
     // Set of the segments in the paths we're keeping
-    let mut segment_names: HashSet<&str> = HashSet::new();
-
-    paths.iter().for_each(|path| {
-        path.segment_names.iter().for_each(|(seg, _)| {
-            segment_names.insert(seg);
-        });
-    });
+    let segment_names: HashSet<&str> = paths
+        .iter()
+        .flat_map(|path| path.segment_names.iter().map(|(seg, _)| seg.as_str()))
+        .collect();
 
     // Filter out the segments in the GFA we don't want
-    let segments: Vec<_> = gfa
-        .segments
-        .into_iter()
-        .filter(|s| segment_names.contains(s.name.as_str()))
-        .collect();
+    let segments = filtered_into!(gfa.segments, |s| segment_names
+        .contains(s.name.as_str()));
 
     // Filter out the links in the GFA we don't want
-    let links: Vec<_> = gfa
-        .links
-        .into_iter()
-        .filter(|l| {
-            segment_names.contains(l.from_segment.as_str())
-                && segment_names.contains(l.to_segment.as_str())
-        })
-        .collect();
+    let links = filtered_into!(gfa.links, |l| {
+        segment_names.contains(l.from_segment.as_str())
+            && segment_names.contains(l.to_segment.as_str())
+    });
 
-    let containments: Vec<_> = gfa
-        .containments
-        .into_iter()
-        .filter(|l| {
-            segment_names.contains(l.container_name.as_str())
-                && segment_names.contains(l.contained_name.as_str())
-        })
-        .collect();
+    let containments = filtered_into!(gfa.containments, |l| {
+        segment_names.contains(l.container_name.as_str())
+            && segment_names.contains(l.contained_name.as_str())
+    });
 
     GFA {
         segments,
