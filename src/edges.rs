@@ -1,9 +1,11 @@
-use gfa::gfa::GFA;
-
 use handlegraph::handle::Direction;
 use handlegraph::handlegraph::{handles_iter, HandleGraph};
 
-pub fn graph_edge_count<T: HandleGraph>(graph: &T) -> Vec<(u64, usize, usize, usize)> {
+/// Return the inbound and outbound edge counts for each node in the
+/// graph
+pub fn graph_edge_count<T: HandleGraph>(
+    graph: &T,
+) -> Vec<(u64, usize, usize, usize)> {
     handles_iter(graph)
         .map(|h| {
             let inbound = graph.degree(h, Direction::Left);
