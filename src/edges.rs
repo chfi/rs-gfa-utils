@@ -1,12 +1,13 @@
 use handlegraph::handle::Direction;
-use handlegraph::handlegraph::{handles_iter, HandleGraph};
+use handlegraph::handlegraph::HandleGraph;
 
 /// Return the inbound and outbound edge counts for each node in the
 /// graph
 pub fn graph_edge_count<T: HandleGraph>(
     graph: &T,
 ) -> Vec<(u64, usize, usize, usize)> {
-    handles_iter(graph)
+    graph
+        .handles_iter()
         .map(|h| {
             let inbound = graph.degree(h, Direction::Left);
             let outbound = graph.degree(h, Direction::Right);
