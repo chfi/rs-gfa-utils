@@ -119,8 +119,6 @@ fn gaf_line_to_pafs<T: OptFields>(
             vec![paf]
         }
         GAFPath::OrientIntv(steps) => {
-            let mut pafs = Vec::new();
-
             let seg_steps: Vec<(&Segment<_, _>, Option<&Link<_, _>>)> = steps
                 .iter()
                 .enumerate()
@@ -137,13 +135,18 @@ fn gaf_line_to_pafs<T: OptFields>(
                 })
                 .collect();
 
+            /*
+            println!("tgt_range: {:?}", gaf.path_range);
+            println!("tgt\tq start\tq end\tt start\tt end");
+            */
+
             let mut query_index = gaf.seq_range.0;
             let mut tgt_offset = gaf.path_range.0;
             let mut query_remaining = gaf.seq_len;
-            println!("tgt_range: {:?}", gaf.path_range);
-            println!("tgt\tq start\tq end\tt start\tt end");
 
             let mut seqs: Vec<BString> = Vec::new();
+
+            let mut pafs = Vec::new();
 
             for (target, link) in seg_steps {
                 let seg_len = target.sequence.len();
@@ -166,6 +169,7 @@ fn gaf_line_to_pafs<T: OptFields>(
 
                 query_index = query_end;
 
+                /*
                 println!(
                     "{}\t{}\t{}\t{}\t{}\t",
                     target_seq_name,
@@ -174,13 +178,35 @@ fn gaf_line_to_pafs<T: OptFields>(
                     tgt_offset,
                     tgt_offset + step_len
                 );
+                */
+
+                // TODO several of these fields need to be changed,
+                // including strand and everything after the target
+                // sequence fields
+                let paf = PAF {
+                    query_seq_name: gaf.seq_name.clone(),
+                    query_seq_len: gaf.seq_len,
+                    query_seq_range: (query_start, query_end),
+                    strand: gaf.strand,
+                    target_seq_name,
+                    target_seq_len,
+                    target_seq_range,
+                    residue_matches: gaf.residue_matches,
+                    block_length: gaf.block_length,
+                    quality: gaf.quality,
+                    optional: gaf.optional.clone(),
+                };
+
+                pafs.push(paf);
                 tgt_offset = 0;
             }
 
+            /*
             for s in seqs {
                 print!("{}\t", s);
             }
             println!();
+            */
             pafs
         }
     }
@@ -208,11 +234,16 @@ pub fn gaf_to_paf<T: OptFields>(
         }
     }
 
+    let mut pafs: Vec<PAF> = Vec::new();
+
     gafs.iter().for_each(|gaf| {
+        /*
         println!("name\tlen\tstart\tend\tstrand\tname\t\tlen\tstart\tend\tres\tblks\tqual\ttags");
         println!("{}", gaf);
-        gaf_line_to_pafs(&segments, &links, &gaf);
+        */
+        let cur_pafs = gaf_line_to_pafs(&segments, &links, &gaf);
+        pafs.extend(cur_pafs);
     });
 
-    Vec::new()
+    pafs
 }
