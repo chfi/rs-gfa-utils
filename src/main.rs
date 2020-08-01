@@ -32,6 +32,11 @@ struct SubgraphArgs {
     file: Option<PathBuf>,
     #[structopt(long, group = "names")]
     list: Option<Vec<String>>,
+    /// Instead of a single list of names, provide several graph
+    /// components as a list of segment names per line. Produces
+    /// multiple subgraphs.
+    #[structopt(long)]
+    components: bool,
 }
 
 #[derive(StructOpt, Debug)]
@@ -97,7 +102,7 @@ fn main() {
             let parser = GFAParser::new();
             let gfa: GFA<BString, OptionalFields> =
                 parser.parse_file(&opt.in_gfa).unwrap();
-            let paf_lines = gaf_convert::gaf_to_paf(&gfa, &args.gaf);
+            let paf_lines = gaf_convert::gaf_to_paf(gfa, &args.gaf);
 
             if let Some(out_path) = args.out {
                 let mut out_file = File::create(&out_path)
