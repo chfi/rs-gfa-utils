@@ -120,44 +120,67 @@ fn gaf_line_to_pafs<T: OptFields>(
         }
         GAFPath::OrientIntv(steps) => {
             let mut pafs = Vec::new();
-            let mut query_start = gaf.seq_range.0;
-            let mut query_end = gaf.seq_range.1;
-            // for (i, step) in steps.iter().enumerate() {
-            for (i, step) in steps[1..].iter().enumerate() {
-                let (o, id) = unwrap_step(step);
 
-                let prev = steps.get(i - 1).unwrap();
-                let (_, prev_id) = unwrap_step(prev);
+            let seg_steps: Vec<(&Segment<_, _>, Option<&Link<_, _>>)> = steps
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    let (_o, id) = unwrap_step(s);
+                    let segment = find_segment(segments, id).unwrap();
+                    let link: Option<&Link<BString, _>> =
+                        steps.get(i + 1).map(|ns| {
+                            let (_, next_id) = unwrap_step(ns);
+                            find_link(links, id, next_id).unwrap()
+                        });
 
-                let seg_prev = find_segment(segments, prev_id).unwrap();
-                let seg = find_segment(segments, id).unwrap();
+                    (segment, link)
+                })
+                .collect();
 
-                let link = find_link(links, id, prev_id).unwrap();
+            let mut query_index = gaf.seq_range.0;
+            let mut tgt_offset = gaf.path_range.0;
+            let mut query_remaining = gaf.seq_len;
+            println!("tgt_range: {:?}", gaf.path_range);
+            println!("tgt\tq start\tq end\tt start\tt end");
 
-                let seg_len = seg_prev.sequence.len();
+            let mut seqs: Vec<BString> = Vec::new();
 
-                let mut paf = gaf_to_paf_clone(gaf);
-                paf.target_seq_name = id.into();
-                paf.target_seq_len = seg_len;
-                // TODO handle overlaps and offsets to figure out
-                // target seq range
-                paf.query_seq_range.0 = query_start;
-                query_start = query_start + seg_len;
-                paf.query_seq_range.1 = query_start; // handle case of offset
+            for (target, link) in seg_steps {
+                let seg_len = target.sequence.len();
 
-                let next_step = steps.get(i + 1);
+                let step_len = query_remaining.min(seg_len - tgt_offset);
+                query_remaining -= step_len;
 
-                // query_start = gaf.
-                /*
+                let query_start = query_index;
+                let query_end = query_start + step_len;
 
-                if let Some(next) = next_step {
-                    let (_, next_id) = unwrap_step(next);
-                    let seg_next = find_segment(segments, next_id).unwrap();
-                    let link = find_link(links, id, next_id).unwrap();
-                } else {
-                }
-                */
+                let target_seq_name = target.name.clone();
+                let target_seq_len = seg_len;
+
+                let target_seq_range = (tgt_offset, tgt_offset + step_len);
+
+                let sequence =
+                    target.sequence[tgt_offset..tgt_offset + step_len].into();
+
+                seqs.push(sequence);
+
+                query_index = query_end;
+
+                println!(
+                    "{}\t{}\t{}\t{}\t{}\t",
+                    target_seq_name,
+                    query_start,
+                    query_end,
+                    tgt_offset,
+                    tgt_offset + step_len
+                );
+                tgt_offset = 0;
             }
+
+            for s in seqs {
+                print!("{}\t", s);
+            }
+            println!();
             pafs
         }
     }
@@ -186,7 +209,9 @@ pub fn gaf_to_paf<T: OptFields>(
     }
 
     gafs.iter().for_each(|gaf| {
+        println!("name\tlen\tstart\tend\tstrand\tname\t\tlen\tstart\tend\tres\tblks\tqual\ttags");
         println!("{}", gaf);
+        gaf_line_to_pafs(&segments, &links, &gaf);
     });
 
     Vec::new()
