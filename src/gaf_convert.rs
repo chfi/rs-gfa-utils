@@ -16,11 +16,15 @@ use gfa::{
 type GAF = gfa::gafpaf::GAF<OptionalFields>;
 type PAF = gfa::gafpaf::PAF<OptionalFields>;
 
+fn set_cigar(opts: &mut OptionalFields, cg: CIGAR) {
+    let cg_tag = opts.iter_mut().find(|o| &o.tag == b"cg").unwrap();
+    cg_tag.value = OptFieldVal::Z(cg.to_string().into());
+}
+
 fn get_cigar(opts: &OptionalFields) -> Option<CIGAR> {
     let cg = opts.get_field(b"cg")?;
     if let OptFieldVal::Z(cg) = &cg.value {
-        let (_, cigar) = CIGAR::parse(&cg).ok()?;
-        Some(cigar)
+        CIGAR::from_bytes(&cg)
     } else {
         None
     }
@@ -135,11 +139,6 @@ fn gaf_line_to_pafs<T: OptFields>(
                 })
                 .collect();
 
-            /*
-            println!("tgt_range: {:?}", gaf.path_range);
-            println!("tgt\tq start\tq end\tt start\tt end");
-            */
-
             let mut query_index = gaf.seq_range.0;
             let mut tgt_offset = gaf.path_range.0;
             let mut query_remaining = gaf.seq_len;
@@ -147,6 +146,9 @@ fn gaf_line_to_pafs<T: OptFields>(
             let mut seqs: Vec<BString> = Vec::new();
 
             let mut pafs = Vec::new();
+
+            let mut gaf_cigar =
+                get_gaf_cigar(gaf).expect("missing cigar in GAF record");
 
             for (target, link) in seg_steps {
                 let seg_len = target.sequence.len();
@@ -165,20 +167,19 @@ fn gaf_line_to_pafs<T: OptFields>(
                 let sequence =
                     target.sequence[tgt_offset..tgt_offset + step_len].into();
 
+                let link_cigar: Option<CIGAR> =
+                    link.and_then(|l| CIGAR::from_bytes(&l.overlap));
+
+                let split_cg = gaf_cigar.split_at(step_len);
+                gaf_cigar = split_cg.1;
+
                 seqs.push(sequence);
 
                 query_index = query_end;
 
-                /*
-                println!(
-                    "{}\t{}\t{}\t{}\t{}\t",
-                    target_seq_name,
-                    query_start,
-                    query_end,
-                    tgt_offset,
-                    tgt_offset + step_len
-                );
-                */
+                let mut optional = gaf.optional.clone();
+
+                set_cigar(&mut optional, split_cg.0);
 
                 // TODO several of these fields need to be changed,
                 // including strand and everything after the target
@@ -194,7 +195,7 @@ fn gaf_line_to_pafs<T: OptFields>(
                     residue_matches: gaf.residue_matches,
                     block_length: gaf.block_length,
                     quality: gaf.quality,
-                    optional: gaf.optional.clone(),
+                    optional,
                 };
 
                 pafs.push(paf);
