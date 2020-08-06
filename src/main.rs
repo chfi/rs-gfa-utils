@@ -1,10 +1,10 @@
 use clap::arg_enum;
 use structopt::{clap::ArgGroup, StructOpt};
 
-use bstr::{io::*, BString};
+use bstr::{io::*, BString, ByteSlice, ByteVec};
 use std::{
     fs::File,
-    io::{BufReader, Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     path::PathBuf,
 };
 
@@ -17,28 +17,50 @@ use handlegraph::hashgraph::HashGraph;
 use gfautil::{edges, gaf_convert, subgraph};
 
 arg_enum! {
-    #[derive(StructOpt, Debug)]
+    #[derive(Debug, PartialEq)]
     enum SubgraphBy {
         Paths,
         Segments,
     }
 }
 
+/// Generate a subgraph of the input GFA.
+///
+/// The output will be the lines of the input GFA that include the
+/// provided segment or path names.
 #[derive(StructOpt, Debug)]
 #[structopt(group = ArgGroup::with_name("names").required(true))]
 struct SubgraphArgs {
+    /// Choose between providing a list of path names, or a list of
+    /// components of segment names
+    #[structopt(name = "paths|segments", possible_values = &["paths", "segments"], case_insensitive = true)]
     subgraph_by: SubgraphBy,
-    #[structopt(long, group = "names")]
+    /// File containing a list of names
+    #[structopt(
+        name = "File containing names",
+        long = "file",
+        group = "names"
+    )]
     file: Option<PathBuf>,
-    #[structopt(long, group = "names")]
+    /// Provide a list of names on the command line
+    #[structopt(name = "List of names", long = "names", group = "names")]
     list: Option<Vec<String>>,
-    /// Instead of a single list of names, provide several graph
-    /// components as a list of segment names per line. Produces
-    /// multiple subgraphs.
-    #[structopt(long)]
-    components: bool,
 }
 
+/*
+#[derive(StructOpt, Debug)]
+#[structopt(group = ArgGroup::with_name("names").required(true))]
+struct InputOptions {
+    #[structopt(name = "path to file", long, group = "names")]
+    file: Option<PathBuf>,
+    #[structopt(name = "list of path or segment names", long, group = "names")]
+    list: Option<Vec<String>>,
+}
+*/
+
+/// Convert a file of GAF records into PAF records.
+///
+/// The provided GFA file should be the same as the one used to create the GAF.
 #[derive(StructOpt, Debug)]
 struct GAF2PAFArgs {
     #[structopt(name = "path to GAF file", long = "gaf", parse(from_os_str))]
@@ -58,7 +80,7 @@ enum Command {
 #[derive(StructOpt, Debug)]
 struct Opt {
     #[structopt(
-        name = "path to GFA input file",
+        name = "input GFA file",
         short,
         long = "gfa",
         parse(from_os_str)
@@ -68,11 +90,10 @@ struct Opt {
     command: Command,
 }
 
-fn read_byte_lines<R: Read>(reader: R) -> Vec<Vec<u8>> {
-    BufReader::new(reader)
-        .byte_lines()
-        .map(|l| l.unwrap())
-        .collect()
+fn byte_lines_iter<'a, R: Read + 'a>(
+    reader: R,
+) -> Box<dyn Iterator<Item = Vec<u8>> + 'a> {
+    Box::new(BufReader::new(reader).byte_lines().map(|l| l.unwrap()))
 }
 
 fn main() {
@@ -82,12 +103,27 @@ fn main() {
             let parser = GFAParser::new();
             let gfa: GFA<BString, OptionalFields> =
                 parser.parse_file(&opt.in_gfa).unwrap();
+
             let names: Vec<Vec<u8>> = if let Some(list) = subgraph_args.list {
                 list.into_iter().map(|s| s.bytes().collect()).collect()
-            } else if let Some(path) = subgraph_args.file {
-                read_byte_lines(File::open(path).unwrap())
             } else {
-                read_byte_lines(std::io::stdin())
+                let in_lines = if let Some(path) = subgraph_args.file {
+                    byte_lines_iter(File::open(path).unwrap())
+                } else {
+                    byte_lines_iter(std::io::stdin())
+                };
+
+                if subgraph_args.subgraph_by == SubgraphBy::Segments {
+                    in_lines
+                        .flat_map(|line| {
+                            line.split_str("\t")
+                                .map(|n| Vec::from_slice(n))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect()
+                } else {
+                    in_lines.collect()
+                }
             };
 
             let new_gfa = match subgraph_args.subgraph_by {

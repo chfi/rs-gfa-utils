@@ -142,7 +142,9 @@ checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
 
 [[package]]
 name = "gfa"
-version = "0.5.0"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "071bd1a045d7114998d35dc2eedb8aefa389d2c03cb5c18ffecb443d9762b044"
 dependencies = [
  "bstr",
  "lazy_static",
@@ -167,6 +169,8 @@ dependencies = [
 [[package]]
 name = "handlegraph"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4fac0e2d3a6389e5108d2c00f61f134ea9f5dc605697e513a475e4a380041ea"
 dependencies = [
  "bstr",
  "gfa",
