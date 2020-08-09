@@ -167,11 +167,7 @@ fn gaf_line_to_pafs<T: OptFields>(
                 let sequence =
                     target.sequence[tgt_offset..tgt_offset + step_len].into();
 
-                let link_cigar: Option<CIGAR> =
-                    link.and_then(|l| CIGAR::from_bytes(&l.overlap));
-
                 let split_cg = gaf_cigar.split_at(step_len);
-                gaf_cigar = split_cg.1;
 
                 seqs.push(sequence);
 
@@ -179,7 +175,12 @@ fn gaf_line_to_pafs<T: OptFields>(
 
                 let mut optional = gaf.optional.clone();
 
-                set_cigar(&mut optional, split_cg.0);
+                if split_cg.0.is_empty() {
+                    set_cigar(&mut optional, split_cg.1);
+                } else {
+                    set_cigar(&mut optional, split_cg.0);
+                    gaf_cigar = split_cg.1;
+                }
 
                 // TODO several of these fields need to be changed,
                 // including strand and everything after the target
