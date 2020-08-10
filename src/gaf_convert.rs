@@ -1,14 +1,9 @@
-use std::{
-    cmp::Ordering,
-    fs::File,
-    io::{prelude::*, BufReader},
-    path::Path,
-};
+use std::{cmp::Ordering, fs::File, io::BufReader, path::Path};
 
-use bstr::{io::*, BStr, BString, ByteSlice, ByteVec};
+use bstr::{io::*, BString, ByteSlice, ByteVec};
 
 use gfa::{
-    gafpaf::{parse_gaf, CIGAROp, GAFPath, GAFStep, CIGAR},
+    gafpaf::{parse_gaf, GAFPath, GAFStep, CIGAR},
     gfa::{Link, Orientation, Segment, GFA},
     optfields::{OptFieldVal, OptFields, OptionalFields},
 };
@@ -32,10 +27,6 @@ fn get_cigar(opts: &OptionalFields) -> Option<CIGAR> {
 
 fn get_gaf_cigar(gaf: &GAF) -> Option<CIGAR> {
     get_cigar(&gaf.optional)
-}
-
-fn get_paf_cigar(paf: &PAF) -> Option<CIGAR> {
-    get_cigar(&paf.optional)
 }
 
 fn gaf_to_paf_clone(gaf: &GAF) -> PAF {
@@ -89,6 +80,7 @@ fn cmp_links<T: OptFields>(
     cmp_links_find(l1, &l2.from_segment, &l2.to_segment)
 }
 
+/*
 fn find_link<'a, T: OptFields>(
     links: &'a [Link<BString, T>],
     from: &[u8],
@@ -99,6 +91,7 @@ fn find_link<'a, T: OptFields>(
         .ok()?;
     links.get(ix)
 }
+*/
 
 fn unwrap_step(step: &GAFStep) -> (Orientation, &[u8]) {
     match step {
@@ -110,12 +103,10 @@ fn unwrap_step(step: &GAFStep) -> (Orientation, &[u8]) {
 // must take sorted segment and link slices
 fn gaf_line_to_pafs<T: OptFields>(
     segments: &[Segment<BString, T>],
-    links: &[Link<BString, T>],
     gaf: &GAF,
 ) -> Vec<PAF> {
     match &gaf.path {
         GAFPath::StableId(id) => {
-            // TODO this will likely be a bit more complex, not sure
             let paf = PAF {
                 target_seq_name: id.clone(),
                 ..gaf_to_paf_clone(gaf)
@@ -123,19 +114,12 @@ fn gaf_line_to_pafs<T: OptFields>(
             vec![paf]
         }
         GAFPath::OrientIntv(steps) => {
-            let seg_steps: Vec<(&Segment<_, _>, Option<&Link<_, _>>)> = steps
+            let seg_steps: Vec<&Segment<_, _>> = steps
                 .iter()
-                .enumerate()
-                .map(|(i, s)| {
+                .map(|s| {
                     let (_o, id) = unwrap_step(s);
                     let segment = find_segment(segments, id).unwrap();
-                    let link: Option<&Link<BString, _>> =
-                        steps.get(i + 1).map(|ns| {
-                            let (_, next_id) = unwrap_step(ns);
-                            find_link(links, id, next_id).unwrap()
-                        });
-
-                    (segment, link)
+                    segment
                 })
                 .collect();
 
@@ -150,7 +134,7 @@ fn gaf_line_to_pafs<T: OptFields>(
             let mut gaf_cigar =
                 get_gaf_cigar(gaf).expect("missing cigar in GAF record");
 
-            for (target, link) in seg_steps {
+            for target in seg_steps {
                 let seg_len = target.sequence.len();
 
                 let step_len = query_remaining.min(seg_len - tgt_offset);
@@ -167,7 +151,8 @@ fn gaf_line_to_pafs<T: OptFields>(
                 let sequence =
                     target.sequence[tgt_offset..tgt_offset + step_len].into();
 
-                let split_cg = gaf_cigar.split_at(step_len);
+                let cg_ix = gaf_cigar.query_index(step_len);
+                let split_cg = gaf_cigar.split_with_index(cg_ix);
 
                 seqs.push(sequence);
 
@@ -203,12 +188,6 @@ fn gaf_line_to_pafs<T: OptFields>(
                 tgt_offset = 0;
             }
 
-            /*
-            for s in seqs {
-                print!("{}\t", s);
-            }
-            println!();
-            */
             pafs
         }
     }
@@ -239,11 +218,7 @@ pub fn gaf_to_paf<T: OptFields>(
     let mut pafs: Vec<PAF> = Vec::new();
 
     gafs.iter().for_each(|gaf| {
-        /*
-        println!("name\tlen\tstart\tend\tstrand\tname\t\tlen\tstart\tend\tres\tblks\tqual\ttags");
-        println!("{}", gaf);
-        */
-        let cur_pafs = gaf_line_to_pafs(&segments, &links, &gaf);
+        let cur_pafs = gaf_line_to_pafs(&segments, &gaf);
         pafs.extend(cur_pafs);
     });
 
