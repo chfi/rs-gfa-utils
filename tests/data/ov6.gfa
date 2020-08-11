@@ -1,0 +1,16 @@
+H	VN:Z:1.0
+S	1	CTGAA
+S	2	ACG
+S	3	TGGC
+S	4	TGTGA
+S	5	TTTC
+S	6	CTGA
+S	7	GTTAC
+L	1	+	2	+	1M
+L	2	+	3	+	1M
+L	3	+	4	+	1M
+L	2	+	5	+	1M
+L	5	+	6	+	1M
+L	6	+	4	+	1M
+L	1	+	7	+	1M
+L	7	+	6	+	1M
