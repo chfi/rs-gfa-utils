@@ -80,19 +80,6 @@ fn cmp_links<T: OptFields>(
     cmp_links_find(l1, &l2.from_segment, &l2.to_segment)
 }
 
-/*
-fn find_link<'a, T: OptFields>(
-    links: &'a [Link<BString, T>],
-    from: &[u8],
-    to: &[u8],
-) -> Option<&'a Link<BString, T>> {
-    let ix = links
-        .binary_search_by(|l| cmp_links_find(l, from, to))
-        .ok()?;
-    links.get(ix)
-}
-*/
-
 fn unwrap_step(step: &GAFStep) -> (Orientation, &[u8]) {
     match step {
         GAFStep::SegId(o, id) => (*o, id.as_ref()),
