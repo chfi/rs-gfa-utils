@@ -101,12 +101,12 @@ fn gaf_line_to_pafs<T: OptFields>(
             vec![paf]
         }
         GAFPath::OrientIntv(steps) => {
-            let seg_steps: Vec<&Segment<_, _>> = steps
+            let seg_steps: Vec<(Orientation, &Segment<_, _>)> = steps
                 .iter()
                 .map(|s| {
-                    let (_o, id) = unwrap_step(s);
+                    let (o, id) = unwrap_step(s);
                     let segment = find_segment(segments, id).unwrap();
-                    segment
+                    (o, segment)
                 })
                 .collect();
 
@@ -121,7 +121,7 @@ fn gaf_line_to_pafs<T: OptFields>(
             let mut gaf_cigar =
                 get_gaf_cigar(gaf).expect("missing cigar in GAF record");
 
-            for target in seg_steps {
+            for (orient, target) in seg_steps {
                 let seg_len = target.sequence.len();
 
                 let step_len = query_remaining.min(seg_len - tgt_offset);
@@ -154,6 +154,15 @@ fn gaf_line_to_pafs<T: OptFields>(
                     gaf_cigar = split_cg.1;
                 }
 
+                use Orientation::*;
+
+                let strand = match (gaf.strand, orient) {
+                    (Forward, Forward) => Forward,
+                    (Forward, Backward) => Backward,
+                    (Backward, Forward) => Backward,
+                    (Backward, Backward) => Forward,
+                };
+
                 // TODO several of these fields need to be changed,
                 // including strand and everything after the target
                 // sequence fields
@@ -161,7 +170,7 @@ fn gaf_line_to_pafs<T: OptFields>(
                     query_seq_name: gaf.seq_name.clone(),
                     query_seq_len: gaf.seq_len,
                     query_seq_range: (query_start, query_end),
-                    strand: gaf.strand,
+                    strand,
                     target_seq_name,
                     target_seq_len,
                     target_seq_range,
