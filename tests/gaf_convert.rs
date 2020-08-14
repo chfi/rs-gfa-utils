@@ -14,12 +14,6 @@ use gfautil::gaf_convert::gaf_to_paf;
 type GAF = gfa::gafpaf::GAF<OptionalFields>;
 type PAF = gfa::gafpaf::PAF<OptionalFields>;
 
-// fn load_gfa(path: &str) -> GFA {
-//     let path = PathBuf::from(path);
-//     let parser = GFAParser::new();
-//     parser.parse_file(path).unwrap()
-// }
-
 fn load_pafs(gfa_path: &str, gaf_path: &str) -> Vec<PAF> {
     let gfa_path = PathBuf::from(gfa_path);
     let parser = GFAParser::new();
@@ -31,12 +25,6 @@ fn load_pafs(gfa_path: &str, gaf_path: &str) -> Vec<PAF> {
 
     pafs
 }
-
-// fn load_gaf(path: &PathBuf) -> io::Result<GAF> {
-//     let
-// }
-
-// fn make_paf(name: &str, start: usize, len: usize, end: usize,
 
 fn get_cigar(opts: &OptionalFields) -> Option<CIGAR> {
     let cg = opts.get_field(b"cg")?;
@@ -87,7 +75,6 @@ fn gafpaf_no_overlaps() {
     let mut iter = pafs.iter();
 
     // read1
-
     let paf = iter.next().unwrap();
     compare_paf_query(&paf, "read1", 6, (0, 1));
     compare_paf_target(&paf, "2", 3, (2, 3));
@@ -104,7 +91,6 @@ fn gafpaf_no_overlaps() {
     compare_paf_rest(&paf, 1, 1, "1M");
 
     // read2
-
     let paf = iter.next().unwrap();
     compare_paf_query(&paf, "read2", 7, (0, 2));
     compare_paf_target(&paf, "2", 3, (1, 3));
@@ -129,7 +115,6 @@ fn gafpaf_overlaps() {
     let mut iter = pafs.iter();
 
     // read1
-
     let paf = iter.next().unwrap();
     compare_paf_query(&paf, "read1", 6, (0, 1));
     compare_paf_target(&paf, "2", 3, (2, 3));
@@ -146,7 +131,6 @@ fn gafpaf_overlaps() {
     compare_paf_rest(&paf, 1, 1, "1M");
 
     // read2
-
     let paf = iter.next().unwrap();
     compare_paf_query(&paf, "read2", 7, (0, 2));
     compare_paf_target(&paf, "2", 3, (1, 3));
@@ -171,49 +155,34 @@ fn gafpaf_dels() {
     let mut iter = pafs.iter();
 
     // read1
-
     let paf = iter.next().unwrap();
-    compare_paf_query(&paf, "read1", 6, (0, 1));
+    compare_paf_query(&paf, "read1", 5, (0, 1));
     compare_paf_target(&paf, "2", 3, (2, 3));
     compare_paf_rest(&paf, 1, 1, "1M");
 
     let paf = iter.next().unwrap();
-    compare_paf_query(&paf, "read1", 6, (1, 5));
+    compare_paf_query(&paf, "read1", 5, (1, 5));
     compare_paf_target(&paf, "3", 4, (0, 4));
-    compare_paf_rest(&paf, 3, 4, "1I3M");
+    compare_paf_rest(&paf, 3, 4, "1M1D2M");
 
     let paf = iter.next().unwrap();
-    compare_paf_query(&paf, "read1", 6, (5, 6));
+    compare_paf_query(&paf, "read1", 5, (5, 6));
     compare_paf_target(&paf, "4", 5, (0, 1));
     compare_paf_rest(&paf, 1, 1, "1M");
 
-    /*
     // read2
-
     let paf = iter.next().unwrap();
-    compare_paf_query(&paf, "read2", 7, (0, 2));
+    compare_paf_query(&paf, "read2", 6, (0, 2));
     compare_paf_target(&paf, "2", 3, (1, 3));
     compare_paf_rest(&paf, 2, 2, "2M");
 
     let paf = iter.next().unwrap();
-    compare_paf_query(&paf, "read2", 7, (2, 6));
+    compare_paf_query(&paf, "read2", 6, (2, 6));
     compare_paf_target(&paf, "5", 4, (0, 4));
-    compare_paf_rest(&paf, 3, 4, "2M1I1M");
+    compare_paf_rest(&paf, 3, 4, "1D3M");
 
     let paf = iter.next().unwrap();
-    compare_paf_query(&paf, "read2", 7, (6, 7));
+    compare_paf_query(&paf, "read2", 6, (6, 7));
     compare_paf_target(&paf, "6", 4, (0, 1));
     compare_paf_rest(&paf, 1, 1, "1M");
-
-    assert!(iter.next().is_none());
-    */
-
-    println!("{:?}", iter.next());
-    println!("{:?}", iter.next());
-    println!("{:?}", iter.next());
-    println!("{:?}", iter.next());
-    println!("{:?}", iter.next());
-    println!("{:?}", iter.next());
-    println!("{:?}", iter.next());
-    println!("{:?}", iter.next());
 }
