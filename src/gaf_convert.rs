@@ -141,20 +141,11 @@ fn gaf_line_to_pafs<T: OptFields>(
                 let cg_ix = gaf_cigar.query_index(step_len);
                 let split_cg = gaf_cigar.split_with_index(cg_ix);
 
+                use Orientation::*;
+
                 seqs.push(sequence);
 
                 query_index = query_end;
-
-                let mut optional = gaf.optional.clone();
-
-                if split_cg.0.is_empty() {
-                    set_cigar(&mut optional, split_cg.1);
-                } else {
-                    set_cigar(&mut optional, split_cg.0);
-                    gaf_cigar = split_cg.1;
-                }
-
-                use Orientation::*;
 
                 let strand = match (gaf.strand, orient) {
                     (Forward, Forward) => Forward,
@@ -162,6 +153,29 @@ fn gaf_line_to_pafs<T: OptFields>(
                     (Backward, Forward) => Backward,
                     (Backward, Backward) => Forward,
                 };
+
+                let mut optional = gaf.optional.clone();
+
+                let paf_cigar;
+
+                if split_cg.0.is_empty() {
+                    paf_cigar = split_cg.1;
+                } else {
+                    paf_cigar = split_cg.0;
+                    gaf_cigar = split_cg.1;
+                }
+
+                let residue_matches = paf_cigar.iter().fold(0, |acc, op| {
+                    if op.is_match_or_mismatch() {
+                        acc + 1
+                    } else {
+                        acc
+                    }
+                });
+
+                set_cigar(&mut optional, paf_cigar);
+
+                let block_length = step_len;
 
                 // TODO several of these fields need to be changed,
                 // including strand and everything after the target
@@ -174,8 +188,8 @@ fn gaf_line_to_pafs<T: OptFields>(
                     target_seq_name,
                     target_seq_len,
                     target_seq_range,
-                    residue_matches: gaf.residue_matches,
-                    block_length: gaf.block_length,
+                    residue_matches,
+                    block_length,
                     quality: gaf.quality,
                     optional,
                 };
