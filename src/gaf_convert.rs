@@ -3,7 +3,7 @@ use std::{cmp::Ordering, fs::File, io::BufReader, path::Path};
 use bstr::{io::*, BString, ByteSlice, ByteVec};
 
 use gfa::{
-    gafpaf::{parse_gaf, GAFPath, GAFStep, CIGAR},
+    gafpaf::{parse_gaf, CIGAROp, GAFPath, GAFStep, CIGAR},
     gfa::{Link, Orientation, Segment, GFA},
     optfields::{OptFieldVal, OptFields, OptionalFields},
 };
@@ -138,14 +138,7 @@ fn gaf_line_to_pafs<T: OptFields>(
                 let sequence =
                     target.sequence[tgt_offset..tgt_offset + step_len].into();
 
-                let cg_ix = gaf_cigar.query_index(step_len);
-                let split_cg = gaf_cigar.split_with_index(cg_ix);
-
                 use Orientation::*;
-
-                seqs.push(sequence);
-
-                query_index = query_end;
 
                 let strand = match (gaf.strand, orient) {
                     (Forward, Forward) => Forward,
@@ -153,6 +146,15 @@ fn gaf_line_to_pafs<T: OptFields>(
                     (Backward, Forward) => Backward,
                     (Backward, Backward) => Forward,
                 };
+
+                let q_ix = gaf_cigar.query_index(step_len);
+                let r_ix = gaf_cigar.ref_index(step_len);
+                let cg_ix = q_ix.min(r_ix);
+                let split_cg = gaf_cigar.split_with_index(cg_ix);
+
+                seqs.push(sequence);
+
+                query_index = query_end;
 
                 let mut optional = gaf.optional.clone();
 
@@ -164,6 +166,16 @@ fn gaf_line_to_pafs<T: OptFields>(
                     paf_cigar = split_cg.0;
                     gaf_cigar = split_cg.1;
                 }
+
+                paf_cigar.iter().for_each(|op| {
+                    use CIGAROp::*;
+                    match op {
+                        D | N => {
+                            query_remaining += 1;
+                        }
+                        _ => (),
+                    }
+                });
 
                 let residue_matches = paf_cigar.iter().fold(0, |acc, op| {
                     if op.is_match_or_mismatch() {
