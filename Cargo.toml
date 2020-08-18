@@ -3,16 +3,23 @@ name = "gfautil"
 version = "0.1.0"
 authors = ["christian <christian@chfi.se>"]
 edition = "2018"
+license = "MIT"
+repository = "https://github.com/chfi/rs-gfa-utils"
+readme = "readme.md"
+keywords = ["bioinformatics", "graph"]
+categories = ["science"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gfa = { path = "../rs-gfa" }
-handlegraph = { path = "../rs-handlegraph" }
-# gfa = "0.6.1"
-# handlegraph = "0.3"
+gfa = "0.6.2"
+handlegraph = "0.3"
 clap = "2.33"
 structopt = "0.3"
 rayon = "1"
 serde = { version = "1.0", features = ["derive"] }
 bstr = "0.2"
+
+[[bin]]
+name = "gfautil"
+test = true
