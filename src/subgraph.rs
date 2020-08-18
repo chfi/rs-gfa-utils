@@ -18,8 +18,7 @@ pub fn paths_new_subgraph<T: OptFields + Clone>(
     gfa: &GFA<BString, T>,
     paths: &[Vec<u8>],
 ) -> GFA<BString, T> {
-    let path_names: HashSet<&[u8]> =
-        paths.into_iter().map(|p| p.as_ref()).collect();
+    let path_names: HashSet<&[u8]> = paths.iter().map(|p| p.as_ref()).collect();
 
     // Filter out the paths in the GFA we don't want
     let paths: Vec<_> =
@@ -62,7 +61,7 @@ pub fn segments_subgraph<T: OptFields + Clone>(
     segment_names: &[Vec<u8>],
 ) -> GFA<BString, T> {
     let segment_names: HashSet<&[u8]> =
-        segment_names.into_iter().map(|s| s.as_ref()).collect();
+        segment_names.iter().map(|s| s.as_ref()).collect();
 
     let segments =
         filtered!(gfa.segments, |s| segment_names.contains(s.name.as_slice()));

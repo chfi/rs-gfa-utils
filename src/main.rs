@@ -4,7 +4,7 @@ use structopt::{clap::ArgGroup, StructOpt};
 use bstr::{io::*, BString, ByteSlice, ByteVec};
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufReader, Read, Write},
     path::PathBuf,
 };
 
@@ -46,17 +46,6 @@ struct SubgraphArgs {
     #[structopt(name = "List of names", long = "names", group = "names")]
     list: Option<Vec<String>>,
 }
-
-/*
-#[derive(StructOpt, Debug)]
-#[structopt(group = ArgGroup::with_name("names").required(true))]
-struct InputOptions {
-    #[structopt(name = "path to file", long, group = "names")]
-    file: Option<PathBuf>,
-    #[structopt(name = "list of path or segment names", long, group = "names")]
-    list: Option<Vec<String>>,
-}
-*/
 
 /// Convert a file of GAF records into PAF records.
 ///
@@ -117,7 +106,7 @@ fn main() {
                     in_lines
                         .flat_map(|line| {
                             line.split_str("\t")
-                                .map(|n| Vec::from_slice(n))
+                                .map(Vec::from_slice)
                                 .collect::<Vec<_>>()
                         })
                         .collect()

@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, fs::File, io::BufReader, path::Path};
 
-use bstr::{io::*, BString, ByteSlice, ByteVec};
+use bstr::{io::*, BString, ByteSlice};
 
 use gfa::{
     gafpaf::{parse_gaf, CIGAROp, GAFPath, GAFStep, CIGAR},
@@ -16,7 +16,7 @@ fn set_cigar(opts: &mut OptionalFields, cg: CIGAR) {
     cg_tag.value = OptFieldVal::Z(cg.to_string().into());
 }
 
-fn get_cigar(opts: &OptionalFields) -> Option<CIGAR> {
+fn get_cigar<T: OptFields>(opts: &T) -> Option<CIGAR> {
     let cg = opts.get_field(b"cg")?;
     if let OptFieldVal::Z(cg) = &cg.value {
         CIGAR::from_bytes(&cg)
@@ -32,7 +32,7 @@ fn get_gaf_cigar(gaf: &GAF) -> Option<CIGAR> {
 fn gaf_to_paf_clone(gaf: &GAF) -> PAF {
     PAF {
         query_seq_name: gaf.seq_name.clone(),
-        query_seq_len: gaf.seq_len.clone(),
+        query_seq_len: gaf.seq_len,
         query_seq_range: gaf.seq_range,
         strand: gaf.strand,
         target_seq_name: Default::default(),
