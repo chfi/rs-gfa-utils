@@ -2,6 +2,7 @@
 name = "gfautil"
 version = "0.1.0"
 authors = ["christian <christian@chfi.se>"]
+description = "Command line tools for working with GFA files and related formats."
 edition = "2018"
 license = "MIT"
 repository = "https://github.com/chfi/rs-gfa-utils"
