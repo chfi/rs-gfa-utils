@@ -8,10 +8,11 @@ use std::{
     path::PathBuf,
 };
 
-use gfa::gfa::GFA;
-use gfa::optfields::OptionalFields;
-use gfa::parser::GFAParser;
-use gfa::writer::gfa_string;
+use gfa::{
+    gfa::GFA, gfa_name_conversion::NameMap, optfields::OptionalFields,
+    parser::GFAParser, writer::gfa_string,
+};
+
 use handlegraph::hashgraph::HashGraph;
 
 use gfautil::{edges, gaf_convert, subgraph};
@@ -56,6 +57,44 @@ struct GAF2PAFArgs {
     gaf: PathBuf,
     #[structopt(name = "PAF output paf", short = "o", long = "paf")]
     out: Option<PathBuf>,
+}
+
+#[derive(StructOpt, Debug)]
+/// Convert a GFA with string names to one with integer names, and
+/// back. If a
+struct GfaIdConvertOptions {
+    /// Path to a name map that was previously generated for the given GFA.
+    /// Required if transforming to the original segment names. If not
+    /// provided, a new map is generated and saved to disk.
+    #[structopt(
+        name = "path to name map",
+        long = "namemap",
+        parse(from_os_str),
+        required_unless("to_usize")
+    )]
+    name_map_path: Option<PathBuf>,
+
+    #[structopt(name = "convert to integer names", long = "to-int")]
+    to_usize: bool,
+
+    #[structopt(name = "check result hash", long = "hash")]
+    check_hash: bool,
+}
+
+fn gfa_to_name_map_path(path: &PathBuf) -> PathBuf {
+    let mut new_path: PathBuf = path.clone();
+    let old_name = new_path.file_stem().and_then(|p| p.to_str()).unwrap();
+    let new_name = format!("{}.name_map.json", old_name);
+    new_path.set_file_name(&new_name);
+    new_path
+}
+
+fn converted_gfa_path(path: &PathBuf) -> PathBuf {
+    let mut new_path: PathBuf = path.clone();
+    let old_name = new_path.file_stem().and_then(|p| p.to_str()).unwrap();
+    let new_name = format!("{}.uint_ids.gfa", old_name);
+    new_path.set_file_name(&new_name);
+    new_path
 }
 
 #[derive(StructOpt, Debug)]
