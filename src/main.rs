@@ -9,8 +9,11 @@ use std::{
 };
 
 use gfa::{
-    gfa::GFA, gfa_name_conversion::NameMap, optfields::OptionalFields,
-    parser::GFAParser, writer::gfa_string,
+    gfa::GFA,
+    gfa_name_conversion::NameMap,
+    optfields::OptionalFields,
+    parser::GFAParser,
+    writer::{gfa_string, write_gfa},
 };
 
 use handlegraph::hashgraph::HashGraph;
@@ -97,15 +100,21 @@ fn converted_gfa_path(path: &PathBuf) -> PathBuf {
     new_path
 }
 
+fn restored_gfa_path(path: &PathBuf) -> PathBuf {
+    let mut new_path: PathBuf = path.clone();
+    let old_name = new_path.file_stem().and_then(|p| p.to_str()).unwrap();
+    let new_name = format!("{}.str_ids.gfa", old_name);
+    new_path.set_file_name(&new_name);
+    new_path
+}
+
 #[derive(StructOpt, Debug)]
 enum Command {
     Subgraph(SubgraphArgs),
     EdgeCount,
     #[structopt(name = "gaf2paf")]
     Gaf2Paf(GAF2PAFArgs),
-    BuildNameMap,
-    ConvertWithNameMap,
-    InvertWithNameMap,
+    GfaSegmentIdConversion(GfaIdConvertOptions),
 }
 
 #[derive(StructOpt, Debug)]
@@ -127,7 +136,8 @@ fn byte_lines_iter<'a, R: Read + 'a>(
     Box::new(BufReader::new(reader).byte_lines().map(|l| l.unwrap()))
 }
 
-fn main() {
+// fn main() -> std::io::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
     match opt.command {
         Command::Subgraph(subgraph_args) => {
@@ -193,5 +203,95 @@ fn main() {
                 .iter()
                 .for_each(|(id, i, o, t)| println!("{},{},{},{}", id, i, o, t));
         }
+        Command::GfaSegmentIdConversion(conv_opt) => {
+            // Converting from string to integer names
+            if !conv_opt.to_usize && conv_opt.name_map_path.is_none() {
+                eprintln!("this shouldn't happen");
+            }
+
+            if conv_opt.to_usize {
+                let parser = GFAParser::new();
+                let gfa: GFA<BString, OptionalFields> =
+                    parser.parse_file(&opt.in_gfa).unwrap();
+
+                let name_map = if let Some(ref path) = conv_opt.name_map_path {
+                    let map = NameMap::load_json(&path)?;
+                    map
+                } else {
+                    NameMap::build_from_gfa(&gfa)
+                };
+
+                if let Some(new_gfa) =
+                    name_map.gfa_bstring_to_usize(&gfa, conv_opt.check_hash)
+                {
+                    let new_gfa_path = converted_gfa_path(&opt.in_gfa);
+                    let mut new_gfa_file = File::create(new_gfa_path.clone())?;
+                    let mut gfa_str = String::new();
+                    write_gfa(&new_gfa, &mut gfa_str);
+                    writeln!(new_gfa_file, "{}", gfa_str)?;
+                    println!(
+                        "Saved converted GFA to {}",
+                        new_gfa_path.display()
+                    );
+
+                    if conv_opt.name_map_path.is_none() {
+                        let name_map_path = gfa_to_name_map_path(&opt.in_gfa);
+                        name_map.save_json(&name_map_path)?;
+                        println!(
+                            "Saved new name map to {}",
+                            name_map_path.display()
+                        );
+                    }
+                } else {
+                    println!("Could not convert the GFA segment IDs");
+                }
+            } else {
+                // Converting from integer to string names
+                let name_map_path = conv_opt
+                    .name_map_path
+                    .expect("Need name map to convert back");
+                let name_map = NameMap::load_json(&name_map_path)?;
+
+                let parser = GFAParser::new();
+                let gfa: GFA<usize, OptionalFields> =
+                    parser.parse_file(&opt.in_gfa).unwrap();
+
+                let new_gfa: GFA<BString, OptionalFields> =
+                    name_map.gfa_usize_to_bstring(&gfa).expect(
+                        "Error during conversion -- is it the right name map?",
+                    );
+
+                let new_gfa_path = restored_gfa_path(&opt.in_gfa);
+                let mut new_gfa_file = File::create(new_gfa_path.clone())?;
+                let mut gfa_str = String::new();
+                write_gfa(&new_gfa, &mut gfa_str);
+                writeln!(new_gfa_file, "{}", gfa_str)?;
+                println!("Saved restored GFA to {}", new_gfa_path.display());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn name_map_path_correct() {
+        let gfa_path =
+            PathBuf::from("../../some_folder/another/some_gfa_file.gfa");
+        let new_path = gfa_to_name_map_path(&gfa_path);
+        assert_eq!(
+            Some("../../some_folder/another/some_gfa_file.name_map.json"),
+            new_path.to_str()
+        );
+    }
+
+    #[test]
+    fn converted_gfa_path_correct() {
+        let gfa_path = PathBuf::from("some_gfa_file.gfa");
+        let new_path = converted_gfa_path(&gfa_path);
+        assert_eq!(Some("some_gfa_file.uint_ids.gfa"), new_path.to_str());
     }
 }
