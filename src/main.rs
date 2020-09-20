@@ -64,6 +64,9 @@ enum Command {
     EdgeCount,
     #[structopt(name = "gaf2paf")]
     Gaf2Paf(GAF2PAFArgs),
+    BuildNameMap,
+    ConvertWithNameMap,
+    InvertWithNameMap,
 }
 
 #[derive(StructOpt, Debug)]
@@ -142,7 +145,7 @@ fn main() {
         }
         Command::EdgeCount => {
             let parser = GFAParser::new();
-            let gfa: GFA<BString, ()> = parser.parse_file(&opt.in_gfa).unwrap();
+            let gfa: GFA<usize, ()> = parser.parse_file(&opt.in_gfa).unwrap();
 
             let hashgraph = HashGraph::from_gfa(&gfa);
             let edge_counts = edges::graph_edge_count(&hashgraph);
