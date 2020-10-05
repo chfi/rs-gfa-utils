@@ -26,6 +26,18 @@ impl<'a> SubPath<'a> {
     }
 }
 
+pub fn oriented_sequence<T: AsRef<[u8]>>(
+    seq: T,
+    orient: Orientation,
+) -> BString {
+    let seq: &[u8] = seq.as_ref();
+    if orient.is_reverse() {
+        dna::revcomp(seq).into()
+    } else {
+        seq.into()
+    }
+}
+
 pub fn path_segments_sequences<'a, T, I>(
     gfa: &'a GFA<usize, T>,
     subpaths: I,
@@ -34,23 +46,15 @@ where
     T: OptFields,
     I: IntoIterator<Item = &'a SubPath<'a>> + 'a,
 {
-    let all_segments: FnvHashMap<usize, Orientation> = subpaths
+    let all_segments: FnvHashSet<usize> = subpaths
         .into_iter()
-        .flat_map(|sub| sub.steps.iter().map(|step| (step.0, step.1)))
+        .flat_map(|sub| sub.steps.iter().map(|step| step.0))
         .collect();
 
     gfa.segments
         .iter()
-        .filter_map(|seg| {
-            let orient = all_segments.get(&seg.name)?;
-            let sequence: BString = if orient.is_reverse() {
-                let seq: &[u8] = seg.sequence.as_ref();
-                dna::revcomp(seq).into()
-            } else {
-                seg.sequence.clone()
-            };
-            Some((seg.name, sequence))
-        })
+        .filter(|&seg| all_segments.contains(&seg.name))
+        .map(|seg| (seg.name, seg.sequence.clone()))
         .collect()
 }
 
@@ -88,6 +92,18 @@ pub fn bubble_subpaths<T: OptFields>(
             })
         })
         .collect()
+}
+
+pub struct VariantKey {
+    pub chromosome: BString,
+    pub pos: usize,
+    pub reference: BString,
+}
+
+pub enum Variant {
+    Del(u8),
+    Ins(u8),
+    Snv(u8),
 }
 
 // Finds all the nodes between two given nodes
@@ -287,7 +303,7 @@ pub fn find_all_paths_between(
 
 /// A struct that holds Variants, as defined in the VCF format
 #[derive(Debug, PartialEq)]
-pub struct Variant {
+pub struct VCFRecord {
     chromosome: BString,
     position: i32,
     id: Option<BString>,
@@ -309,7 +325,7 @@ pub fn detect_all_variants(
     verbose: bool,
     max_edges: i32,
     reference_paths: &[BString],
-) -> Vec<Variant> {
+) -> Vec<VCFRecord> {
     let mut stuff_to_alts_map: HashMap<BString, HashSet<BString>> =
         HashMap::new();
 
@@ -348,7 +364,7 @@ pub fn detect_all_variants(
     }
 
     // Convert stuff_to_alts_map to a more readable format
-    let mut vcf_list: Vec<Variant> = Vec::new();
+    let mut vcf_list: Vec<VCFRecord> = Vec::new();
     for (chrom_pos_ref, alt_type_set) in &stuff_to_alts_map {
         let vec: Vec<_> = chrom_pos_ref.split_str("_").collect();
         // let vec: Vec<&[u8]> = chrom_pos_ref.split('_').collect();
@@ -372,7 +388,7 @@ pub fn detect_all_variants(
         let pos = pos.to_str().unwrap();
         let pos = pos.parse().unwrap();
 
-        let v = Variant {
+        let v = VCFRecord {
             chromosome: chrom.into(),
             position: pos,
             id: None,
