@@ -177,34 +177,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let total_seq: BString = subpath
                     .steps
                     .iter()
-                    .filter_map(|&(id, _, _)| bubble_segs.get(&id))
-                    .flat_map(|x| x.iter().copied())
-                    .collect::<Vec<u8>>()
-                    .into();
+                    .filter_map(|&(id, orient, _)| {
+                        let seq = bubble_segs.get(&id)?;
+                        let seq = variants::oriented_sequence(&seq, orient);
+                        Some(seq)
+                    })
+                    .collect();
 
                 println!("\t~~ {}", total_seq);
-
-                println!();
             }
-
-            // let hash_graph = HashGraph::from_gfa(&gfa);
-            // let from = NodeId::from(var_args.from);
-            // let to = NodeId::from(var_args.to);
-
-            // let nodes = variants::extract_bubble_nodes(&hash_graph, from, to);
-            // for node in nodes {
-            //     println!("{}", node);
-            // }
-
-            // let paths =
-            //     variants::extract_paths_between_nodes(&hash_graph, from, to);
-            // let mut paths = variants::find_all_paths_between(
-            //     &hash_graph,
-            //     &from,
-            //     &to,
-            //     std::i32::MAX,
-            // );
         }
+
         Command::Subgraph(subgraph_args) => {
             let parser = GFAParser::new();
             let gfa: GFA<BString, OptionalFields> =

@@ -10,7 +10,7 @@ use bio::alphabets::dna;
 
 use gfa::{
     cigar::CIGAR,
-    gfa::{Orientation, GFA},
+    gfa::{Orientation, Path, GFA},
     optfields::OptFields,
 };
 
@@ -94,16 +94,146 @@ pub fn bubble_subpaths<T: OptFields>(
         .collect()
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariantKey {
     pub chromosome: BString,
     pub pos: usize,
     pub reference: BString,
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Variant {
     Del(u8),
     Ins(u8),
     Snv(u8),
+}
+
+pub fn detect_variants_against_ref(
+    segment_sequences: &FnvHashMap<usize, BString>,
+    ref_name: &[u8],
+    ref_path: &[usize],
+    query_path: &[usize],
+) -> FnvHashMap<VariantKey, Variant> {
+    let mut variants = FnvHashMap::default();
+
+    let mut ref_ix = 0;
+    let mut query_ix = 0;
+
+    let mut ref_seq_ix = 0;
+    let mut query_seq_ix = 0;
+
+    loop {
+        if ref_ix >= ref_path.len() || query_ix >= query_path.len() {
+            break;
+        }
+
+        let ref_node = ref_path[ref_ix];
+        let ref_seq = segment_sequences.get(&ref_node).unwrap();
+
+        let query_node = query_path[query_ix];
+        let query_seq = segment_sequences.get(&query_node).unwrap();
+
+        if ref_node == query_node {
+            ref_ix += 1;
+            ref_seq_ix += ref_seq.len();
+
+            query_ix += 1;
+            query_seq_ix += query_seq.len();
+        } else {
+            let next_ref_node = ref_path[ref_ix + 1];
+            let next_query_node = query_path[query_ix + 1];
+
+            if next_ref_node == query_node {
+                // Deletion
+                let prev_ref_node = ref_path[ref_ix - 1];
+                let prev_ref_seq =
+                    segment_sequences.get(&prev_ref_node).unwrap();
+
+                let last_prev_seq: u8 = *prev_ref_seq.last().unwrap();
+
+                let key_ref_seq: BString = std::iter::once(last_prev_seq)
+                    .chain(ref_seq.iter().copied())
+                    .collect();
+
+                let var_key = VariantKey {
+                    chromosome: ref_name.into(),
+                    pos: query_seq_ix - 1,
+                    reference: key_ref_seq,
+                };
+
+                let variant = Variant::Del(last_prev_seq);
+
+                variants.insert(var_key, variant);
+
+                ref_ix += 1;
+                ref_seq_ix += ref_seq.len();
+            } else if next_query_node == ref_node {
+                // Insertion
+                let prev_ref_node = ref_path[ref_ix - 1];
+                let prev_ref_seq =
+                    segment_sequences.get(&prev_ref_node).unwrap();
+
+                let last_prev_seq: u8 = *prev_ref_seq.last().unwrap();
+
+                let key_ref_seq: BString = std::iter::once(last_prev_seq)
+                    .chain(ref_seq.iter().copied())
+                    .collect();
+
+                let var_key = VariantKey {
+                    chromosome: ref_name.into(),
+                    pos: ref_seq_ix - 1,
+                    reference: key_ref_seq,
+                };
+
+                let variant = Variant::Ins(last_prev_seq);
+
+                variants.insert(var_key, variant);
+
+                query_ix += 1;
+                query_seq_ix += query_seq.len();
+            } else {
+                // ref or SNV
+
+                let var_key = VariantKey {
+                    chromosome: ref_name.into(),
+                    pos: query_seq_ix,
+                    reference: ref_seq.clone(),
+                };
+
+                let last_query_seq: u8 = *query_seq.last().unwrap();
+                let variant = Variant::Ins(last_query_seq);
+
+                variants.insert(var_key, variant);
+
+                ref_ix += 1;
+                ref_seq_ix += ref_seq.len();
+
+                query_ix += 1;
+                query_seq_ix += query_seq.len();
+            }
+        }
+    }
+
+    variants
+}
+
+pub fn detect_variants_in_sub_paths(
+    segment_sequences: &FnvHashMap<usize, BString>,
+    // bubble: (u64, u64),
+    // ref_path: &Path<BString, T>,
+    sub_paths: &[SubPath<'_>],
+) -> FnvHashMap<BString, FnvHashSet<Variant>> {
+    let mut variants = FnvHashMap::default();
+
+    for ref_path in sub_paths.iter() {
+        for query in sub_paths.iter() {
+            if ref_path.path_name != query.path_name {
+                // step through the path and query in lockstep
+            }
+        }
+    }
+
+    variants
 }
 
 // Finds all the nodes between two given nodes
