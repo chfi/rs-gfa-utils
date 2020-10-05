@@ -4,7 +4,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
-use bstr::BString;
+use bstr::{BString, ByteSlice};
 
 // Finds all the nodes between two given nodes
 pub fn extract_bubble_nodes<T>(
@@ -204,29 +204,29 @@ pub fn find_all_paths_between(
 /// A struct that holds Variants, as defined in the VCF format
 #[derive(Debug, PartialEq)]
 pub struct Variant {
-    chromosome: String,
+    chromosome: BString,
     position: i32,
-    id: Option<String>,
-    reference: String,
-    alternate: Option<String>,
+    id: Option<BString>,
+    reference: BString,
+    alternate: Option<BString>,
     quality: Option<i32>,
-    filter: Option<String>,
-    info: Option<String>,
-    format: Option<String>,
-    sample_name: Option<String>,
+    filter: Option<BString>,
+    info: Option<BString>,
+    format: Option<BString>,
+    sample_name: Option<BString>,
 }
 
 /// Detects variants from a list of bubbles
 pub fn detect_all_variants(
-    path_to_steps_map: &HashMap<String, Vec<String>>,
+    path_to_steps_map: &HashMap<BString, Vec<BString>>,
     possible_bubbles_list: &[(NodeId, NodeId)],
     graph: &HashGraph,
-    node_id_to_path_and_pos_map: &BTreeMap<NodeId, HashMap<String, usize>>,
+    node_id_to_path_and_pos_map: &BTreeMap<NodeId, HashMap<BString, usize>>,
     verbose: bool,
     max_edges: i32,
-    reference_paths: &[String],
+    reference_paths: &[BString],
 ) -> Vec<Variant> {
-    let mut stuff_to_alts_map: HashMap<String, HashSet<String>> =
+    let mut stuff_to_alts_map: HashMap<BString, HashSet<BString>> =
         HashMap::new();
 
     // For each reference path, explore all bubbles in order to find variants;
@@ -235,7 +235,10 @@ pub fn detect_all_variants(
         // Obtain all steps for current_ref
         let ref_path: Vec<u64> = path_to_steps_map[current_ref]
             .iter()
-            .map(|x| x.parse::<u64>().unwrap())
+            .map(|x| {
+                let s = x.to_str().unwrap();
+                s.parse::<u64>().unwrap()
+            })
             .collect();
 
         if verbose {
@@ -263,7 +266,8 @@ pub fn detect_all_variants(
     // Convert stuff_to_alts_map to a more readable format
     let mut vcf_list: Vec<Variant> = Vec::new();
     for (chrom_pos_ref, alt_type_set) in &stuff_to_alts_map {
-        let vec: Vec<&str> = chrom_pos_ref.split('_').collect();
+        let vec: Vec<_> = chrom_pos_ref.split_str("_").collect();
+        // let vec: Vec<&[u8]> = chrom_pos_ref.split('_').collect();
         let chrom = vec[0];
         let pos = vec[1];
         let refr = vec[2];
@@ -271,26 +275,30 @@ pub fn detect_all_variants(
         let (alt_list, type_set): (Vec<_>, Vec<_>) = alt_type_set
             .iter()
             .map(|x| {
-                let split: Vec<_> = x.split('_').collect();
-                (split[0].to_string(), split[1])
+                let split: Vec<_> = x.split_str("_").collect();
+                (split[0], split[1])
             })
             .unzip();
 
-        let alts = alt_list.join(",");
-        let mut types = "TYPE=".to_string();
-        types.push_str(&type_set.join(";TYPE="));
+        let alts = alt_list.join(&b","[..]);
+        let mut types: BString = "TYPE=".into();
+        types.extend_from_slice(&type_set.join(&b";TYPE="[..]));
+        // types.push_str(&type_set.join(&b";TYPE="[..]));
+
+        let pos = pos.to_str().unwrap();
+        let pos = pos.parse().unwrap();
 
         let v = Variant {
-            chromosome: chrom.to_string(),
-            position: pos.to_string().parse::<i32>().unwrap(),
+            chromosome: chrom.into(),
+            position: pos,
             id: None,
-            reference: refr.to_string(),
-            alternate: Some(alts),
+            reference: refr.into(),
+            alternate: Some(alts.into()),
             quality: None,
             filter: None,
             info: Some(types),
-            format: Some("GT".to_string()),
-            sample_name: Some("0|1".to_string()),
+            format: Some("GT".into()),
+            sample_name: Some("0|1".into()),
         };
 
         vcf_list.push(v);
