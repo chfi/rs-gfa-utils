@@ -71,10 +71,8 @@ where
 
                 for h in neighbors {
                     let node = h.id();
-                    if !visited.contains(&node) || node == to {
-                        stack.push(node);
-                        parents.insert(node, current);
-                    }
+                    stack.push(node);
+                    parents.insert(node, current);
                 }
             } else {
                 let mut cur_step = to;
