@@ -16,33 +16,31 @@ pub fn paths_in_bubble<T: OptFields>(
     from: usize,
     to: usize,
 ) -> Vec<(BString, Vec<(usize, Orientation)>)> {
-    let mut bubble_paths = Vec::new();
+    gfa.paths
+        .iter()
+        .filter_map(|path| {
+            let mut steps = path
+                .iter()
+                .skip_while(|&(x, _)| x != from && x != to)
+                .peekable();
 
-    for path in gfa.paths.iter() {
-        let mut steps = path
-            .iter()
-            .skip_while(|&(x, _)| x != from && x != to)
-            .peekable();
-
-        if let Some(&(first, _)) = steps.peek() {
+            let &(first, _) = steps.peek()?;
             let end = if first == from { to } else { from };
 
-            let steps = steps
-                .scan(first, |previous, (step, orient)| {
+            let steps: Vec<_> = steps
+                .scan(first, |previous, step| {
                     if *previous == end {
                         None
                     } else {
-                        *previous = step;
-                        Some((step, orient))
+                        *previous = step.0;
+                        Some(step)
                     }
                 })
                 .collect();
 
-            bubble_paths.push((path.path_name.clone(), steps));
-        }
-    }
-
-    bubble_paths
+            Some((path.path_name.clone(), steps))
+        })
+        .collect()
 }
 
 // Finds all the nodes between two given nodes
