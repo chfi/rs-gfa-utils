@@ -158,8 +158,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             //     println!("{}", node);
             // }
 
-            let paths =
-                variants::extract_paths_between_nodes(&hash_graph, from, to);
+            // let paths =
+            //     variants::extract_paths_between_nodes(&hash_graph, from, to);
+            let mut paths = variants::find_all_paths_between(
+                &hash_graph,
+                &from,
+                &to,
+                std::i32::MAX,
+            );
+
+            paths.dedup();
             for path in paths {
                 println!("{:?}", path);
             }
