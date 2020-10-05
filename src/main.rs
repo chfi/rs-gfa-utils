@@ -160,9 +160,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let paths = variants::paths_in_bubble(&gfa, from, to);
 
             for (name, path) in paths.iter() {
-                println!("{} - {:?}", name, path.len());
+                let steps = path.iter().map(|(x, _)| x).collect::<Vec<_>>();
+                println!("{} - {:?}", name, steps);
             }
 
+            println!("---------------");
             for p in gfa.paths.iter() {
                 let steps = p.iter().map(|(a, _)| a).collect::<Vec<_>>();
 
@@ -187,7 +189,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     //
                     println!("  {} at {}", from, ix);
                     let sub_steps =
-                        steps.iter().skip(ix - 10).take(20).collect::<Vec<_>>();
+                        steps.iter().skip(ix).take(20).collect::<Vec<_>>();
                     println!("  -- {:?}", sub_steps);
                 }
 

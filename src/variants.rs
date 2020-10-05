@@ -19,13 +19,27 @@ pub fn paths_in_bubble<T: OptFields>(
     let mut bubble_paths = Vec::new();
 
     for path in gfa.paths.iter() {
-        let name = path.path_name.clone();
-        let steps: Vec<_> = path
+        let mut steps = path
             .iter()
-            .skip_while(|&(x, _)| x != from)
-            .take_while(|&(x, _)| x != to)
-            .collect();
-        bubble_paths.push((name, steps));
+            .skip_while(|&(x, _)| x != from && x != to)
+            .peekable();
+
+        if let Some(&(first, _)) = steps.peek() {
+            let end = if first == from { to } else { from };
+
+            let steps = steps
+                .scan(first, |previous, (step, orient)| {
+                    if *previous == end {
+                        None
+                    } else {
+                        *previous = step;
+                        Some((step, orient))
+                    }
+                })
+                .collect();
+
+            bubble_paths.push((path.path_name.clone(), steps));
+        }
     }
 
     bubble_paths
