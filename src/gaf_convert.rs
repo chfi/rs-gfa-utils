@@ -3,7 +3,8 @@ use std::{cmp::Ordering, fs::File, io::BufReader, path::Path};
 use bstr::{io::*, BString, ByteSlice};
 
 use gfa::{
-    gafpaf::{parse_gaf, CIGAROp, GAFPath, GAFStep, CIGAR},
+    cigar::{CIGAROp, CIGAR},
+    gafpaf::{parse_gaf, GAFPath, GAFStep},
     gfa::{Link, Orientation, Segment, GFA},
     optfields::{OptFieldVal, OptFields, OptionalFields},
 };
@@ -19,7 +20,7 @@ fn set_cigar(opts: &mut OptionalFields, cg: CIGAR) {
 fn get_cigar<T: OptFields>(opts: &T) -> Option<CIGAR> {
     let cg = opts.get_field(b"cg")?;
     if let OptFieldVal::Z(cg) = &cg.value {
-        CIGAR::from_bytes(&cg)
+        CIGAR::from_bytestring(&cg)
     } else {
         None
     }

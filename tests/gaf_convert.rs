@@ -1,10 +1,10 @@
-use std::{fs::File, io, io::BufReader, path::PathBuf};
+use std::path::PathBuf;
 
-use bstr::{io::*, BString, ByteSlice, ByteVec};
+use bstr::BString;
 
 use gfa::{
-    gafpaf::{parse_gaf, GAFPath, GAFStep, CIGAR},
-    gfa::{Orientation, GFA},
+    cigar::CIGAR,
+    gfa::GFA,
     optfields::{OptFieldVal, OptFields, OptionalFields},
     parser::GFAParser,
 };
@@ -29,7 +29,7 @@ fn load_pafs(gfa_path: &str, gaf_path: &str) -> Vec<PAF> {
 fn get_cigar(opts: &OptionalFields) -> Option<CIGAR> {
     let cg = opts.get_field(b"cg")?;
     if let OptFieldVal::Z(cg) = &cg.value {
-        CIGAR::from_bytes(&cg)
+        CIGAR::from_bytestring(&cg)
     } else {
         None
     }

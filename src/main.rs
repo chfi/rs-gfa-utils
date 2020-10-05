@@ -9,16 +9,15 @@ use std::{
 };
 
 use gfa::{
-    gfa::GFA,
-    gfa_name_conversion::NameMap,
+    gfa::{name_conversion::NameMap, GFA},
     optfields::OptionalFields,
     parser::GFAParser,
     writer::{gfa_string, write_gfa},
 };
 
-use handlegraph::hashgraph::HashGraph;
+use handlegraph::{handle::NodeId, hashgraph::HashGraph};
 
-use gfautil::{edges, gaf_convert, subgraph};
+use gfautil::{edges, gaf_convert, subgraph, variants};
 
 arg_enum! {
     #[derive(Debug, PartialEq)]
@@ -84,6 +83,12 @@ struct GfaIdConvertOptions {
     check_hash: bool,
 }
 
+#[derive(StructOpt, Debug)]
+struct VariantArgs {
+    from: u64,
+    to: u64,
+}
+
 fn gfa_to_name_map_path(path: &PathBuf) -> PathBuf {
     let mut new_path: PathBuf = path.clone();
     let old_name = new_path.file_stem().and_then(|p| p.to_str()).unwrap();
@@ -115,6 +120,7 @@ enum Command {
     #[structopt(name = "gaf2paf")]
     Gaf2Paf(GAF2PAFArgs),
     GfaSegmentIdConversion(GfaIdConvertOptions),
+    Variant(VariantArgs),
 }
 
 #[derive(StructOpt, Debug)]
@@ -136,10 +142,28 @@ fn byte_lines_iter<'a, R: Read + 'a>(
     Box::new(BufReader::new(reader).byte_lines().map(|l| l.unwrap()))
 }
 
-// fn main() -> std::io::Result<()> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
+
     match opt.command {
+        Command::Variant(var_args) => {
+            let parser = GFAParser::new();
+            let gfa: GFA<usize, ()> = parser.parse_file(&opt.in_gfa).unwrap();
+            let hash_graph = HashGraph::from_gfa(&gfa);
+            let from = NodeId::from(var_args.from);
+            let to = NodeId::from(var_args.to);
+
+            // let nodes = variants::extract_bubble_nodes(&hash_graph, from, to);
+            // for node in nodes {
+            //     println!("{}", node);
+            // }
+
+            let paths =
+                variants::extract_paths_between_nodes(&hash_graph, from, to);
+            for path in paths {
+                println!("{:?}", path);
+            }
+        }
         Command::Subgraph(subgraph_args) => {
             let parser = GFAParser::new();
             let gfa: GFA<BString, OptionalFields> =
