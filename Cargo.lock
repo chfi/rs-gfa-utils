@@ -393,11 +393,13 @@ dependencies = [
 name = "gfautil"
 version = "0.1.0"
 dependencies = [
+ "bio",
  "bstr",
  "clap",
  "fnv",
  "gfa",
  "handlegraph",
+ "itertools",
  "rayon",
  "rs-cactusgraph",
  "serde",

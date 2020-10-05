@@ -6,6 +6,8 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use bstr::{BStr, BString, ByteSlice, ByteVec};
 
+use bio::alphabets::dna;
+
 use gfa::{
     cigar::CIGAR,
     gfa::{Orientation, GFA},
@@ -18,19 +20,37 @@ pub struct SubPath<'a> {
     pub steps: Vec<(usize, Orientation, Option<&'a CIGAR>)>,
 }
 
-pub fn path_segments_sequences<'a, T: OptFields>(
+impl<'a> SubPath<'a> {
+    pub fn segment_ids(&self) -> impl Iterator<Item = usize> + '_ {
+        self.steps.iter().map(|x| x.0)
+    }
+}
+
+pub fn path_segments_sequences<'a, T, I>(
     gfa: &'a GFA<usize, T>,
-    subpaths: &'a [SubPath<'a>],
-) -> FnvHashMap<usize, BString> {
-    let all_segments: FnvHashSet<usize> = subpaths
-        .iter()
-        .flat_map(|sp| sp.steps.iter().map(|(n, _, _)| n).copied())
+    subpaths: I,
+) -> FnvHashMap<usize, BString>
+where
+    T: OptFields,
+    I: IntoIterator<Item = &'a SubPath<'a>> + 'a,
+{
+    let all_segments: FnvHashMap<usize, Orientation> = subpaths
+        .into_iter()
+        .flat_map(|sub| sub.steps.iter().map(|step| (step.0, step.1)))
         .collect();
 
     gfa.segments
         .iter()
-        .filter(|&seg| all_segments.contains(&seg.name))
-        .map(|seg| (seg.name, seg.sequence.clone()))
+        .filter_map(|seg| {
+            let orient = all_segments.get(&seg.name)?;
+            let sequence: BString = if orient.is_reverse() {
+                let seq: &[u8] = seg.sequence.as_ref();
+                dna::revcomp(seq).into()
+            } else {
+                seg.sequence.clone()
+            };
+            Some((seg.name, sequence))
+        })
         .collect()
 }
 
@@ -66,38 +86,6 @@ pub fn bubble_subpaths<T: OptFields>(
                 path_name: path.path_name.clone(),
                 steps,
             })
-        })
-        .collect()
-}
-
-pub fn paths_in_bubble<T: OptFields>(
-    gfa: &GFA<usize, T>,
-    from: usize,
-    to: usize,
-) -> Vec<(BString, Vec<(usize, Orientation)>)> {
-    gfa.paths
-        .iter()
-        .filter_map(|path| {
-            let mut steps = path
-                .iter()
-                .skip_while(|&(x, _)| x != from && x != to)
-                .peekable();
-
-            let &(first, _) = steps.peek()?;
-            let end = if first == from { to } else { from };
-
-            let steps: Vec<_> = steps
-                .scan(first, |previous, step| {
-                    if *previous == end {
-                        None
-                    } else {
-                        *previous = step.0;
-                        Some(step)
-                    }
-                })
-                .collect();
-
-            Some((path.path_name.clone(), steps))
         })
         .collect()
 }
