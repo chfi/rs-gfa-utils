@@ -4,7 +4,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
-use bstr::{BString, ByteSlice};
+use bstr::{BStr, BString, ByteSlice, ByteVec};
 
 // Finds all the nodes between two given nodes
 pub fn extract_bubble_nodes<T>(
@@ -314,19 +314,19 @@ pub fn detect_all_variants(
 }
 /// Detect variants for a specific reference
 fn detect_variants_per_reference(
-    current_ref: &str,
+    current_ref: &[u8],
     ref_path: &[u64],
     possible_bubbles_list: &[(NodeId, NodeId)],
     graph: &HashGraph,
-    node_id_to_path_and_pos_map: &BTreeMap<NodeId, HashMap<String, usize>>,
-    stuff_to_alts_map: &mut HashMap<String, HashSet<String>>,
+    node_id_to_path_and_pos_map: &BTreeMap<NodeId, HashMap<BString, usize>>,
+    stuff_to_alts_map: &mut HashMap<BString, HashSet<BString>>,
     verbose: bool,
     max_edges: i32,
 ) {
     // info!("BEFORE GET LAST");
 
     // Create closure that will be used later
-    let get_last = |prec_node_seq_ref: &[u8], node_seq_ref| {
+    let get_last = |prec_node_seq_ref: &[u8], node_seq_ref: &[u8]| {
         let last: &[u8] = &prec_node_seq_ref[prec_node_seq_ref.len() - 1..];
         let mut last: Vec<u8> = last.into();
         last.extend(node_seq_ref);
@@ -363,8 +363,18 @@ fn detect_variants_per_reference(
 
             //println!("INSIDE FOR LOOP");
 
-            let mut pos_ref =
-                node_id_to_path_and_pos_map[&start][current_ref] + 1;
+            let x: &[u8] = current_ref;
+            let path_map: &HashMap<BString, usize> =
+                node_id_to_path_and_pos_map.get(&start).unwrap();
+
+            // let ucurr
+            let x: &BStr = x.as_ref();
+            let pos_ref = path_map.get(x).unwrap();
+
+            let mut pos_ref = pos_ref + 1;
+
+            // let mut pos_ref =
+            //     node_id_to_path_and_pos_map[&start][current_ref.as_ref()] + 1;
             let mut pos_path = pos_ref;
 
             let max_index = std::cmp::min(path.len(), ref_path.len());
@@ -443,36 +453,37 @@ fn detect_variants_per_reference(
                         let prec_nod_seq_ref = graph
                             .sequence(Handle::pack(prec_node_id_ref, false));
 
-                        let last = get_last(&prec_nod_seq_ref, node_seq_ref);
+                        let last = get_last(&prec_nod_seq_ref, &node_seq_ref);
 
-                        let key = [
-                            current_ref.to_string(),
-                            (pos_path - 1).to_string(),
-                            last,
-                        ]
-                        .join("_");
+                        let pos_path_bs = (pos_path - 1).to_string();
+                        let pos_path_bs = Vec::from(pos_path_bs.as_bytes());
+                        let key = [current_ref.into(), pos_path_bs, last]
+                            .join(&b"_"[..]);
+
+                        let key = key.into();
+
                         stuff_to_alts_map
                             .entry(key)
                             .or_insert_with(HashSet::new);
                         //TODO: find a better way to do this
-                        let last = get_last(&prec_nod_seq_ref, node_seq_ref);
+                        let last = get_last(&prec_nod_seq_ref, &node_seq_ref);
 
-                        let key = [
-                            current_ref.to_string(),
-                            (pos_path - 1).to_string(),
-                            last,
-                        ]
-                        .join("_");
+                        let pos_path_bs = (pos_path - 1).to_string();
+                        let pos_path_bs = Vec::from(pos_path_bs.as_bytes());
+                        let key = [current_ref.into(), pos_path_bs, last]
+                            .join(&b"_"[..]);
+
+                        let key: BString = key.into();
 
                         let last =
-                            prec_nod_seq_ref[prec_nod_seq_ref.len() - 1..];
+                            &prec_nod_seq_ref[prec_nod_seq_ref.len() - 1..];
                         // .to_string();
-                        let mut string_to_insert = last;
-                        string_to_insert.push_str("_del");
+                        let mut string_to_insert = Vec::from(last);
+                        string_to_insert.extend(b"_del");
                         stuff_to_alts_map
                             .get_mut(&key)
                             .unwrap()
-                            .insert(string_to_insert);
+                            .insert(string_to_insert.into());
 
                         pos_ref += node_seq_ref.len();
 
@@ -505,42 +516,48 @@ fn detect_variants_per_reference(
                         let prec_nod_seq_ref = graph
                             .sequence(Handle::pack(prec_node_id_ref, false));
 
-                        let last = prec_nod_seq_ref
-                            [prec_nod_seq_ref.len() - 1..]
-                            .to_string();
+                        let last = Vec::from(
+                            &prec_nod_seq_ref[prec_nod_seq_ref.len() - 1..],
+                        );
                         //let key = [current_ref.to_string(), (pos_ref-1).to_string(), String::from(prec_nod_seq_ref)].join("_");
                         let key = [
-                            current_ref.to_string(),
-                            (pos_ref - 1).to_string(),
+                            current_ref.into(),
+                            Vec::from((pos_ref - 1).to_string().as_bytes()),
                             last,
                         ]
-                        .join("_");
+                        .join(&b"_"[..]);
 
                         stuff_to_alts_map
-                            .entry(key)
+                            .entry(key.into())
                             .or_insert_with(HashSet::new);
 
                         //Re-create key since it goes out of scope
-                        let last = prec_nod_seq_ref
-                            [prec_nod_seq_ref.len() - 1..]
-                            .to_string();
+                        let last = Vec::from(
+                            &prec_nod_seq_ref[prec_nod_seq_ref.len() - 1..],
+                        );
+
                         let key = [
-                            current_ref.to_string(),
-                            (pos_ref - 1).to_string(),
+                            current_ref.into(),
+                            Vec::from((pos_ref - 1).to_string().as_bytes()),
                             last,
                         ]
-                        .join("_");
+                        .join(&b"_"[..]);
 
                         let last = prec_nod_seq_ref
                             [prec_nod_seq_ref.len() - 1..]
-                            .to_string();
-                        let mut string_to_insert = last;
-                        string_to_insert.push_str(node_seq_path);
+                            .into();
+
+                        let mut string_to_insert: Vec<u8> = last;
+                        string_to_insert.push_str(&node_seq_path);
+                        // string_to_insert.extend_from_slice(&node_seq_path);
                         string_to_insert.push_str("_ins");
+                        // string_to_insert.push_
+
+                        let key: BString = key.into();
                         stuff_to_alts_map
                             .get_mut(&key)
                             .unwrap()
-                            .insert(string_to_insert);
+                            .insert(string_to_insert.into());
 
                         pos_path += node_seq_path.len();
 
@@ -569,31 +586,34 @@ fn detect_variants_per_reference(
                             }
                         }
 
-                        let key = [
-                            current_ref.to_string(),
-                            pos_path.to_string(),
-                            node_seq_ref.to_string(),
+                        let key: BString = [
+                            current_ref,
+                            pos_path.to_string().as_bytes(),
+                            node_seq_ref.as_bytes(),
                         ]
-                        .join("_");
+                        .join(&b"_"[..])
+                        .into();
 
                         stuff_to_alts_map
-                            .entry(key)
+                            .entry(key.into())
                             .or_insert_with(HashSet::new);
 
                         //TODO: find a better way to do this
-                        let key = [
-                            current_ref.to_string(),
-                            pos_path.to_string(),
-                            node_seq_ref.to_string(),
+                        let key: BString = [
+                            current_ref,
+                            pos_path.to_string().as_bytes(),
+                            node_seq_ref.as_bytes(),
                         ]
-                        .join("_");
+                        .join(&b"_"[..])
+                        .into();
+
                         let mut string_to_insert =
                             node_seq_path.chars().last().unwrap().to_string();
                         string_to_insert.push_str("_snv");
                         stuff_to_alts_map
                             .get_mut(&key)
                             .unwrap()
-                            .insert(string_to_insert);
+                            .insert(string_to_insert.into());
 
                         pos_ref += node_seq_ref.len();
                         pos_path += node_seq_path.len();
