@@ -6,6 +6,31 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use bstr::{BStr, BString, ByteSlice, ByteVec};
 
+use gfa::{
+    gfa::{Orientation, Path, GFA},
+    optfields::OptFields,
+};
+
+pub fn paths_in_bubble<T: OptFields>(
+    gfa: &GFA<usize, T>,
+    from: usize,
+    to: usize,
+) -> Vec<(BString, Vec<(usize, Orientation)>)> {
+    let mut bubble_paths = Vec::new();
+
+    for path in gfa.paths.iter() {
+        let name = path.path_name.clone();
+        let steps: Vec<_> = path
+            .iter()
+            .skip_while(|&(x, _)| x != from)
+            .take_while(|&(x, _)| x != to)
+            .collect();
+        bubble_paths.push((name, steps));
+    }
+
+    bubble_paths
+}
+
 // Finds all the nodes between two given nodes
 pub fn extract_bubble_nodes<T>(
     graph: &T,
@@ -45,7 +70,7 @@ where
     visited
 }
 
-pub fn extract_paths_between_nodes<T>(
+pub fn extract_nodes_in_bubble<T>(
     graph: &T,
     from: NodeId,
     to: NodeId,

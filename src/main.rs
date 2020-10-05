@@ -9,7 +9,7 @@ use std::{
 };
 
 use gfa::{
-    gfa::{name_conversion::NameMap, GFA},
+    gfa::{name_conversion::NameMap, Orientation, GFA},
     optfields::OptionalFields,
     parser::GFAParser,
     writer::{gfa_string, write_gfa},
@@ -149,17 +149,70 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Command::Variant(var_args) => {
             let parser = GFAParser::new();
             let gfa: GFA<usize, ()> = parser.parse_file(&opt.in_gfa).unwrap();
-            let hash_graph = HashGraph::from_gfa(&gfa);
-            let from = NodeId::from(var_args.from);
-            let to = NodeId::from(var_args.to);
+
+            println!("segments {}", gfa.segments.len());
+            println!("links    {}", gfa.links.len());
+            println!("paths    {}", gfa.paths.len());
+
+            let from = var_args.from as usize;
+            let to = var_args.to as usize;
+
+            let paths = variants::paths_in_bubble(&gfa, from, to);
+
+            for (name, path) in paths.iter() {
+                println!("{} - {:?}", name, path.len());
+            }
+
+            for p in gfa.paths.iter() {
+                let steps = p.iter().map(|(a, _)| a).collect::<Vec<_>>();
+
+                let from = var_args.from as usize;
+                let to = var_args.to as usize;
+                let has_from = steps.contains(&from);
+                let has_to = steps.contains(&to);
+
+                println!("---------------");
+                println!("{} - {} steps", p.path_name, steps.len());
+
+                let start_ix = steps.iter().position(|&x| x == from);
+                let end_ix = steps.iter().position(|&x| x == to);
+
+                let start = start_ix.min(end_ix);
+                let end = start_ix.max(end_ix);
+
+                println!("  {} at \t{:?}", from, start_ix);
+                println!("  {} at \t{:?}", to, end_ix);
+
+                if let Some(ix) = steps.iter().position(|&x| x == from) {
+                    //
+                    println!("  {} at {}", from, ix);
+                    let sub_steps =
+                        steps.iter().skip(ix - 10).take(20).collect::<Vec<_>>();
+                    println!("  -- {:?}", sub_steps);
+                }
+
+                if let (Some(s), Some(e)) = (start, end) {
+                    let sub_path = &steps[s..e];
+                    println!("steps between start and end: {}", sub_path.len());
+                }
+
+                let start_count = steps.iter().filter(|&&x| x == from).count();
+                println!(" start count: {}", start_count);
+
+                println!();
+            }
+
+            // let hash_graph = HashGraph::from_gfa(&gfa);
+            // let from = NodeId::from(var_args.from);
+            // let to = NodeId::from(var_args.to);
 
             // let nodes = variants::extract_bubble_nodes(&hash_graph, from, to);
             // for node in nodes {
             //     println!("{}", node);
             // }
 
-            let paths =
-                variants::extract_paths_between_nodes(&hash_graph, from, to);
+            // let paths =
+            //     variants::extract_paths_between_nodes(&hash_graph, from, to);
             // let mut paths = variants::find_all_paths_between(
             //     &hash_graph,
             //     &from,
@@ -167,10 +220,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             //     std::i32::MAX,
             // );
 
+            // let bubbles = vec![(2302, 2306), (328, 332)]
+            //     .into_iter()
+            //     .map(|(a, b)| (NodeId::from(a), NodeId::from(b)))
+            //     .collect::<Vec<_>>();
+
             // paths.dedup();
-            for path in paths {
-                println!("{:?}", path);
-            }
+            // for path in paths {
+            //     println!("{:?}", path);
+            // }
         }
         Command::Subgraph(subgraph_args) => {
             let parser = GFAParser::new();
