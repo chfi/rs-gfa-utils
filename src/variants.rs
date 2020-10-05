@@ -7,9 +7,68 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use bstr::{BStr, BString, ByteSlice, ByteVec};
 
 use gfa::{
-    gfa::{Orientation, Path, GFA},
+    cigar::CIGAR,
+    gfa::{Orientation, GFA},
     optfields::OptFields,
 };
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct SubPath<'a> {
+    pub path_name: BString,
+    pub steps: Vec<(usize, Orientation, Option<&'a CIGAR>)>,
+}
+
+pub fn path_segments_sequences<'a, T: OptFields>(
+    gfa: &'a GFA<usize, T>,
+    subpaths: &'a [SubPath<'a>],
+) -> FnvHashMap<usize, BString> {
+    let all_segments: FnvHashSet<usize> = subpaths
+        .iter()
+        .flat_map(|sp| sp.steps.iter().map(|(n, _, _)| n).copied())
+        .collect();
+
+    gfa.segments
+        .iter()
+        .filter(|&seg| all_segments.contains(&seg.name))
+        .map(|seg| (seg.name, seg.sequence.clone()))
+        .collect()
+}
+
+pub fn bubble_subpaths<T: OptFields>(
+    gfa: &GFA<usize, T>,
+    from: usize,
+    to: usize,
+) -> Vec<SubPath<'_>> {
+    gfa.paths
+        .iter()
+        .filter_map(|path| {
+            let mut steps = path
+                .iter()
+                .zip(path.overlaps.iter())
+                .skip_while(|&((x, _o), _cg)| x != from && x != to)
+                .peekable();
+
+            let &((first, _), _) = steps.peek()?;
+            let end = if first == from { to } else { from };
+
+            let steps: Vec<_> = steps
+                .scan(first, |previous, ((step, orient), overlap)| {
+                    if *previous == end {
+                        None
+                    } else {
+                        *previous = step;
+                        Some((step, orient, overlap.as_ref()))
+                    }
+                })
+                .collect();
+
+            Some(SubPath {
+                path_name: path.path_name.clone(),
+                steps,
+            })
+        })
+        .collect()
+}
 
 pub fn paths_in_bubble<T: OptFields>(
     gfa: &GFA<usize, T>,

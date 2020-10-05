@@ -157,49 +157,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let from = var_args.from as usize;
             let to = var_args.to as usize;
 
-            let paths = variants::paths_in_bubble(&gfa, from, to);
+            let subpaths = variants::bubble_subpaths(&gfa, from, to);
 
-            for (name, path) in paths.iter() {
-                let steps = path.iter().map(|(x, _)| x).collect::<Vec<_>>();
-                println!("{} - {:?}", name, steps);
-            }
+            let bubble_segs =
+                variants::path_segments_sequences(&gfa, &subpaths);
 
-            println!("---------------");
-            for p in gfa.paths.iter() {
-                let steps = p.iter().map(|(a, _)| a).collect::<Vec<_>>();
+            for subpath in subpaths.iter() {
+                println!(
+                    "~ {}\t{} steps",
+                    subpath.path_name,
+                    subpath.steps.len()
+                );
 
-                let from = var_args.from as usize;
-                let to = var_args.to as usize;
-                let has_from = steps.contains(&from);
-                let has_to = steps.contains(&to);
-
-                println!("---------------");
-                println!("{} - {} steps", p.path_name, steps.len());
-
-                let start_ix = steps.iter().position(|&x| x == from);
-                let end_ix = steps.iter().position(|&x| x == to);
-
-                let start = start_ix.min(end_ix);
-                let end = start_ix.max(end_ix);
-
-                println!("  {} at \t{:?}", from, start_ix);
-                println!("  {} at \t{:?}", to, end_ix);
-
-                if let Some(ix) = steps.iter().position(|&x| x == from) {
-                    //
-                    println!("  {} at {}", from, ix);
-                    let sub_steps =
-                        steps.iter().skip(ix).take(20).collect::<Vec<_>>();
-                    println!("  -- {:?}", sub_steps);
+                for &(id, orient, _) in subpath.steps.iter() {
+                    let seg_seq = bubble_segs.get(&id).unwrap();
+                    println!("~  ~  {}{}\t{}", id, orient, seg_seq);
                 }
 
-                if let (Some(s), Some(e)) = (start, end) {
-                    let sub_path = &steps[s..e];
-                    println!("steps between start and end: {}", sub_path.len());
-                }
+                let total_seq: BString = subpath
+                    .steps
+                    .iter()
+                    .filter_map(|&(id, _, _)| bubble_segs.get(&id))
+                    .flat_map(|x| x.iter().copied())
+                    .collect::<Vec<u8>>()
+                    .into();
 
-                let start_count = steps.iter().filter(|&&x| x == from).count();
-                println!(" start count: {}", start_count);
+                println!("\t~~ {}", total_seq);
 
                 println!();
             }
@@ -221,16 +204,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             //     &to,
             //     std::i32::MAX,
             // );
-
-            // let bubbles = vec![(2302, 2306), (328, 332)]
-            //     .into_iter()
-            //     .map(|(a, b)| (NodeId::from(a), NodeId::from(b)))
-            //     .collect::<Vec<_>>();
-
-            // paths.dedup();
-            // for path in paths {
-            //     println!("{:?}", path);
-            // }
         }
         Command::Subgraph(subgraph_args) => {
             let parser = GFAParser::new();
