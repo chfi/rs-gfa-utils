@@ -103,9 +103,19 @@ pub struct VariantKey {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Variant {
-    Del(u8),
-    Ins(u8),
+    Del(BString),
+    Ins(BString),
     Snv(u8),
+}
+
+impl std::fmt::Display for Variant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Variant::Del(b) => write!(f, "Del({})", b),
+            Variant::Ins(b) => write!(f, "Ins({})", b),
+            Variant::Snv(b) => write!(f, "Snv({})", char::from(*b)),
+        }
+    }
 }
 
 pub fn detect_variants_against_ref(
@@ -161,7 +171,7 @@ pub fn detect_variants_against_ref(
                     sequence: key_ref_seq,
                 };
 
-                let variant = Variant::Del(last_prev_seq);
+                let variant = Variant::Del(BString::from(&[last_prev_seq][..]));
 
                 variants.insert(var_key, variant);
 
@@ -185,15 +195,13 @@ pub fn detect_variants_against_ref(
                     sequence: key_ref_seq,
                 };
 
-                let variant = Variant::Ins(last_prev_seq);
+                let variant = Variant::Ins(BString::from(&[last_prev_seq][..]));
 
                 variants.insert(var_key, variant);
 
                 query_ix += 1;
                 query_seq_ix += query_seq.len();
             } else {
-                // ref or SNV
-
                 let var_key = VariantKey {
                     ref_name: ref_name.into(),
                     pos: query_seq_ix,
@@ -201,7 +209,7 @@ pub fn detect_variants_against_ref(
                 };
 
                 let last_query_seq: u8 = *query_seq.last().unwrap();
-                let variant = Variant::Ins(last_query_seq);
+                let variant = Variant::Snv(last_query_seq);
 
                 variants.insert(var_key, variant);
 
@@ -444,6 +452,29 @@ pub struct VCFRecord {
     info: Option<BString>,
     format: Option<BString>,
     sample_name: Option<BString>,
+}
+
+impl std::fmt::Display for VCFRecord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn display_field<T: std::fmt::Display>(field: Option<T>) -> String {
+            if let Some(x) = field {
+                x.to_string()
+            } else {
+                ".".to_string()
+            }
+        }
+
+        write!(f, "{}\t", self.chromosome)?;
+        write!(f, "{}\t", self.position)?;
+        write!(f, "{}\t", display_field(self.id.as_ref()))?;
+        write!(f, "{}\t", self.reference)?;
+        write!(f, "{}\t", display_field(self.alternate.as_ref()))?;
+        write!(f, "{}\t", display_field(self.quality.as_ref()))?;
+        write!(f, "{}\t", display_field(self.filter.as_ref()))?;
+        write!(f, "{}\t", display_field(self.info.as_ref()))?;
+        write!(f, "{}\t", display_field(self.format.as_ref()))?;
+        writeln!(f, "{}", display_field(self.sample_name.as_ref()))
+    }
 }
 
 /// Detects variants from a list of bubbles
