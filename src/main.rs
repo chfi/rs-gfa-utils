@@ -157,11 +157,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let from = var_args.from as usize;
             let to = var_args.to as usize;
 
+            let from = 2302;
+            let to = 2306;
+
             let subpaths = variants::bubble_subpaths(&gfa, from, to);
 
             let bubble_segs =
                 variants::path_segments_sequences(&gfa, &subpaths);
 
+            let ref_path_name: BString = "gi|28212470:131613-146345".into();
+            let query_path_name: BString = "gi|28212469:126036-137103".into();
+
+            let ref_path = subpaths
+                .iter()
+                .find(|x| &x.path_name == &ref_path_name)
+                .unwrap();
+
+            let ref_path = ref_path.segment_ids().collect::<Vec<_>>();
+            // let ref_path = ref_path.into_iter().map(|path| path.segment_ids().collect
+
+            let query_path = subpaths
+                .iter()
+                .find(|x| &x.path_name == &query_path_name)
+                .unwrap();
+
+            let query_path = query_path.segment_ids().collect::<Vec<_>>();
+
+            println!("{}\t{:?}", ref_path_name, ref_path);
+            println!("{}\t{:?}", query_path_name, query_path);
+
+            let vars = variants::detect_variants_against_ref(
+                &bubble_segs,
+                &ref_path_name,
+                &ref_path,
+                &query_path,
+            );
+
+            for (key, var) in vars {
+                println!("{:?}\t{:?}", key, var);
+            }
+
+            /*
             for subpath in subpaths.iter() {
                 println!(
                     "~ {}\t{} steps",
@@ -186,6 +222,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 println!("\t~~ {}", total_seq);
             }
+            */
         }
 
         Command::Subgraph(subgraph_args) => {

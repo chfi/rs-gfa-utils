@@ -96,9 +96,9 @@ pub fn bubble_subpaths<T: OptFields>(
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariantKey {
-    pub chromosome: BString,
+    pub ref_name: BString,
+    pub sequence: BString,
     pub pos: usize,
-    pub reference: BString,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -156,9 +156,9 @@ pub fn detect_variants_against_ref(
                     .collect();
 
                 let var_key = VariantKey {
-                    chromosome: ref_name.into(),
+                    ref_name: ref_name.into(),
                     pos: query_seq_ix - 1,
-                    reference: key_ref_seq,
+                    sequence: key_ref_seq,
                 };
 
                 let variant = Variant::Del(last_prev_seq);
@@ -180,9 +180,9 @@ pub fn detect_variants_against_ref(
                     .collect();
 
                 let var_key = VariantKey {
-                    chromosome: ref_name.into(),
+                    ref_name: ref_name.into(),
                     pos: ref_seq_ix - 1,
-                    reference: key_ref_seq,
+                    sequence: key_ref_seq,
                 };
 
                 let variant = Variant::Ins(last_prev_seq);
@@ -195,9 +195,9 @@ pub fn detect_variants_against_ref(
                 // ref or SNV
 
                 let var_key = VariantKey {
-                    chromosome: ref_name.into(),
+                    ref_name: ref_name.into(),
                     pos: query_seq_ix,
-                    reference: ref_seq.clone(),
+                    sequence: ref_seq.clone(),
                 };
 
                 let last_query_seq: u8 = *query_seq.last().unwrap();
