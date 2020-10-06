@@ -130,7 +130,9 @@ pub fn detect_variants_against_ref(
 
     let mut ref_ix = 0;
     let mut query_ix = 0;
+
     let mut ref_seq_ix = 0;
+    let mut query_seq_ix = 0;
 
     loop {
         if ref_ix >= ref_path.len() || query_ix >= query_path.len() {
@@ -236,16 +238,26 @@ pub fn detect_variants_against_ref(
 
 pub fn detect_variants_in_sub_paths(
     segment_sequences: &FnvHashMap<usize, BString>,
-    // bubble: (u64, u64),
-    // ref_path: &Path<BString, T>,
     sub_paths: &[SubPath<'_>],
-) -> FnvHashMap<BString, FnvHashSet<Variant>> {
+) -> FnvHashMap<BString, FnvHashMap<VariantKey, Variant>> {
     let mut variants = FnvHashMap::default();
 
     for ref_path in sub_paths.iter() {
+        let ref_name = ref_path.path_name.clone();
+        let ref_steps = ref_path.segment_ids().collect::<Vec<_>>();
         for query in sub_paths.iter() {
             if ref_path.path_name != query.path_name {
-                // step through the path and query in lockstep
+                let query_path = query.segment_ids().collect::<Vec<_>>();
+                let vars = detect_variants_against_ref(
+                    segment_sequences,
+                    &ref_name,
+                    &ref_steps,
+                    &query_path,
+                );
+
+                let var_map: &mut FnvHashMap<_, _> =
+                    variants.entry(ref_name.clone()).or_default();
+                var_map.extend(vars.into_iter());
             }
         }
     }

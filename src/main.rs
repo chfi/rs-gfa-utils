@@ -157,34 +157,79 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let from = var_args.from as usize;
             let to = var_args.to as usize;
 
-            let from = 2302;
-            let to = 2306;
-
-            let subpaths = variants::bubble_subpaths(&gfa, from, to);
+            let sub_paths = variants::bubble_sub_paths(&gfa, from, to);
 
             let bubble_segs =
-                variants::path_segments_sequences(&gfa, &subpaths);
+                variants::path_segments_sequences(&gfa, &sub_paths);
+            for subpath in sub_paths.iter() {
+                let name = subpath.path_name.to_str().unwrap();
+                print!("~ {:30}\t", name);
+
+                let total_seq: BString = bstr::join(
+                    "\t",
+                    subpath.steps.iter().filter_map(|&(id, orient, _)| {
+                        let seq = bubble_segs.get(&id)?;
+                        let seq = variants::oriented_sequence(&seq, orient);
+                        Some(seq)
+                    }),
+                )
+                .into();
+
+                println!("{}", total_seq);
+            }
+            println!();
+
+            /*
+            let from = 2302;
+            let to = 2306;
 
             let ref_path_name: BString = "gi|28212470:131613-146345".into();
             let query_path_name: BString = "gi|28212469:126036-137103".into();
 
-            let ref_path = subpaths
+            let ref_path = sub_paths
                 .iter()
                 .find(|x| &x.path_name == &ref_path_name)
                 .unwrap();
 
             let ref_path = ref_path.segment_ids().collect::<Vec<_>>();
-            // let ref_path = ref_path.into_iter().map(|path| path.segment_ids().collect
 
-            let query_path = subpaths
+            let ref_seq: BString = ref_path
+                .iter()
+                .filter_map(|&id| {
+                    let seq = bubble_segs.get(&id)?;
+                    Some(seq.clone())
+                })
+                .collect();
+
+            let query_path = sub_paths
                 .iter()
                 .find(|x| &x.path_name == &query_path_name)
                 .unwrap();
 
             let query_path = query_path.segment_ids().collect::<Vec<_>>();
 
+            let query_seq: BString = query_path
+                .iter()
+                .filter_map(|&id| {
+                    let seq = bubble_segs.get(&id)?;
+                    Some(seq.clone())
+                })
+                .collect();
+
             println!("{}\t{:?}", ref_path_name, ref_path);
+            println!("\t~~ {}", ref_seq);
+
+            for q in ref_path.iter() {
+                print!(" {}", bubble_segs.get(q).unwrap());
+            }
+            println!();
+
             println!("{}\t{:?}", query_path_name, query_path);
+            println!("\t~~ {}", query_seq);
+            for q in query_path.iter() {
+                print!(" {}", bubble_segs.get(q).unwrap());
+            }
+            println!();
 
             let vars = variants::detect_variants_against_ref(
                 &bubble_segs,
@@ -193,36 +238,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &query_path,
             );
 
+            let mut print_header = true;
             for (key, var) in vars {
-                println!("{:?}\t{:?}", key, var);
-            }
-
-            /*
-            for subpath in subpaths.iter() {
-                println!(
-                    "~ {}\t{} steps",
-                    subpath.path_name,
-                    subpath.steps.len()
-                );
-
-                for &(id, orient, _) in subpath.steps.iter() {
-                    let seg_seq = bubble_segs.get(&id).unwrap();
-                    println!("~  ~  {}{}\t{}", id, orient, seg_seq);
+                let ref_name = &key.ref_name;
+                let seq = &key.sequence;
+                let pos = key.pos;
+                let spacing = std::iter::repeat(b' ')
+                    .take(ref_name.len())
+                    .collect::<BString>();
+                if print_header {
+                    println!("{} pos\tseq\tvar", spacing);
+                    print_header = false;
                 }
-
-                let total_seq: BString = subpath
-                    .steps
-                    .iter()
-                    .filter_map(|&(id, orient, _)| {
-                        let seq = bubble_segs.get(&id)?;
-                        let seq = variants::oriented_sequence(&seq, orient);
-                        Some(seq)
-                    })
-                    .collect();
-
-                println!("\t~~ {}", total_seq);
+                println!("{}:{}\t{}\t{}", ref_name, pos, seq, var);
             }
             */
+
+            let vars = variants::detect_variants_in_sub_paths(
+                &bubble_segs,
+                &sub_paths,
+            );
+
+            for (path, var_set) in vars {
+                println!("Path {}", path);
+                for (key, var) in var_set {
+                    let seq = &key.sequence;
+                    let pos = key.pos;
+                    println!("  {}\t{}\t{}", pos, seq, var);
+                }
+                println!();
+            }
         }
 
         Command::Subgraph(subgraph_args) => {
