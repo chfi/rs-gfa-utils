@@ -58,7 +58,7 @@ where
         .collect()
 }
 
-pub fn bubble_subpaths<T: OptFields>(
+pub fn bubble_sub_paths<T: OptFields>(
     gfa: &GFA<usize, T>,
     from: usize,
     to: usize,
@@ -106,6 +106,7 @@ pub enum Variant {
     Del(BString),
     Ins(BString),
     Snv(u8),
+    Mnv(BString),
 }
 
 impl std::fmt::Display for Variant {
@@ -114,6 +115,7 @@ impl std::fmt::Display for Variant {
             Variant::Del(b) => write!(f, "Del({})", b),
             Variant::Ins(b) => write!(f, "Ins({})", b),
             Variant::Snv(b) => write!(f, "Snv({})", char::from(*b)),
+            Variant::Mnv(b) => write!(f, "Mnv({})", b),
         }
     }
 }
@@ -128,9 +130,7 @@ pub fn detect_variants_against_ref(
 
     let mut ref_ix = 0;
     let mut query_ix = 0;
-
     let mut ref_seq_ix = 0;
-    let mut query_seq_ix = 0;
 
     loop {
         if ref_ix >= ref_path.len() || query_ix >= query_path.len() {
@@ -150,6 +150,10 @@ pub fn detect_variants_against_ref(
             query_ix += 1;
             query_seq_ix += query_seq.len();
         } else {
+            if ref_ix + 1 >= ref_path.len() || query_ix + 1 >= query_path.len()
+            {
+                break;
+            }
             let next_ref_node = ref_path[ref_ix + 1];
             let next_query_node = query_path[query_ix + 1];
 
@@ -167,12 +171,11 @@ pub fn detect_variants_against_ref(
 
                 let var_key = VariantKey {
                     ref_name: ref_name.into(),
-                    pos: query_seq_ix - 1,
+                    pos: ref_seq_ix,
                     sequence: key_ref_seq,
                 };
 
                 let variant = Variant::Del(BString::from(&[last_prev_seq][..]));
-
                 variants.insert(var_key, variant);
 
                 ref_ix += 1;
@@ -185,17 +188,19 @@ pub fn detect_variants_against_ref(
 
                 let last_prev_seq: u8 = *prev_ref_seq.last().unwrap();
 
-                let key_ref_seq: BString = std::iter::once(last_prev_seq)
-                    .chain(ref_seq.iter().copied())
-                    .collect();
+                let key_ref_seq: BString =
+                    std::iter::once(last_prev_seq).collect();
 
                 let var_key = VariantKey {
                     ref_name: ref_name.into(),
-                    pos: ref_seq_ix - 1,
+                    pos: ref_seq_ix,
                     sequence: key_ref_seq,
                 };
 
-                let variant = Variant::Ins(BString::from(&[last_prev_seq][..]));
+                let var_seq: BString = std::iter::once(last_prev_seq)
+                    .chain(query_seq.iter().copied())
+                    .collect();
+                let variant = Variant::Ins(var_seq);
 
                 variants.insert(var_key, variant);
 
@@ -204,12 +209,16 @@ pub fn detect_variants_against_ref(
             } else {
                 let var_key = VariantKey {
                     ref_name: ref_name.into(),
-                    pos: query_seq_ix,
+                    pos: ref_seq_ix + 1,
                     sequence: ref_seq.clone(),
                 };
 
-                let last_query_seq: u8 = *query_seq.last().unwrap();
-                let variant = Variant::Snv(last_query_seq);
+                let variant = if ref_seq.len() == 1 {
+                    let last_query_seq: u8 = *query_seq.last().unwrap();
+                    Variant::Snv(last_query_seq)
+                } else {
+                    Variant::Mnv(query_seq.clone())
+                };
 
                 variants.insert(var_key, variant);
 
