@@ -168,7 +168,12 @@ pub fn detect_variants_against_ref(
 
             if next_ref_node == query_node {
                 // Deletion
-                let prev_ref_node = ref_path[ref_ix - 1];
+                let prev_ref_node = if ref_ix == 0 {
+                    ref_path[ref_ix]
+                } else {
+                    ref_path[ref_ix - 1]
+                };
+
                 let prev_ref_seq =
                     segment_sequences.get(&prev_ref_node).unwrap();
 
@@ -191,7 +196,12 @@ pub fn detect_variants_against_ref(
                 ref_seq_ix += ref_seq.len();
             } else if next_query_node == ref_node {
                 // Insertion
-                let prev_ref_node = ref_path[ref_ix - 1];
+
+                let prev_ref_node = if ref_ix == 0 {
+                    ref_path[ref_ix]
+                } else {
+                    ref_path[ref_ix - 1]
+                };
                 let prev_ref_seq =
                     segment_sequences.get(&prev_ref_node).unwrap();
 
