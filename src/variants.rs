@@ -58,6 +58,51 @@ where
         .collect()
 }
 
+pub fn sub_path_base_offset<T: OptFields>(
+    segment_map: &FnvHashMap<usize, &[u8]>,
+    path: &Path<usize, T>,
+    step_ix: usize,
+) -> Option<usize> {
+    let result =
+        path.iter()
+            .enumerate()
+            .try_fold(0, |offset, (ix, (seg, _))| {
+                if ix == step_ix {
+                    Err(Some(offset))
+                } else {
+                    let seq = segment_map.get(&seg).ok_or(None)?;
+                    Ok(offset + seq.len())
+                }
+            });
+    result.err().unwrap()
+}
+
+pub fn many_sub_paths<T>(
+    gfa: &GFA<usize, T>,
+    indices: &FnvHashSet<u64>,
+) -> FnvHashMap<BString, FnvHashMap<u64, Vec<usize>>>
+where
+    T: OptFields,
+{
+    gfa.paths
+        .iter()
+        .map(|path| {
+            let mut index_map: FnvHashMap<u64, Vec<usize>> =
+                FnvHashMap::default();
+
+            for (ix, (step, _orient)) in path.iter().enumerate() {
+                let step_u64 = step as u64;
+                if indices.contains(&step_u64) {
+                    let entry = index_map.entry(step_u64).or_default();
+                    entry.push(ix);
+                }
+            }
+
+            (path.path_name.clone(), index_map)
+        })
+        .collect()
+}
+
 pub fn bubble_sub_paths<T: OptFields>(
     gfa: &GFA<usize, T>,
     from: usize,
