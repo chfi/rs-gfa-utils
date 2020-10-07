@@ -15,6 +15,8 @@ use gfa::{
     writer::{gfa_string, write_gfa},
 };
 
+use fnv::{FnvHashMap, FnvHashSet};
+
 use handlegraph::{handle::NodeId, hashgraph::HashGraph};
 
 use gfautil::{edges, gaf_convert, subgraph, variants};
@@ -85,8 +87,7 @@ struct GfaIdConvertOptions {
 
 #[derive(StructOpt, Debug)]
 struct VariantArgs {
-    from: u64,
-    to: u64,
+    ultrabubble_path: Option<PathBuf>,
 }
 
 fn gfa_to_name_map_path(path: &PathBuf) -> PathBuf {
@@ -150,123 +151,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let parser = GFAParser::new();
             let gfa: GFA<usize, ()> = parser.parse_file(&opt.in_gfa).unwrap();
 
-            println!("segments {}", gfa.segments.len());
-            println!("links    {}", gfa.links.len());
-            println!("paths    {}", gfa.paths.len());
-
-            let from = var_args.from as usize;
-            let to = var_args.to as usize;
-
-            let sub_paths = variants::bubble_sub_paths(&gfa, from, to);
-
-            let bubble_segs =
-                variants::path_segments_sequences(&gfa, &sub_paths);
-            for subpath in sub_paths.iter() {
-                let name = subpath.path_name.to_str().unwrap();
-                print!("~ {:30}\t", name);
-
-                let total_seq: BString = bstr::join(
-                    "\t",
-                    subpath.steps.iter().filter_map(|&(id, orient, _)| {
-                        let seq = bubble_segs.get(&id)?;
-                        let seq = variants::oriented_sequence(&seq, orient);
-                        Some(seq)
-                    }),
-                )
-                .into();
-
-                println!("{}", total_seq);
-            }
-            println!();
-
-            /*
-            let from = 2302;
-            let to = 2306;
-
-            let ref_path_name: BString = "gi|28212470:131613-146345".into();
-            let query_path_name: BString = "gi|28212469:126036-137103".into();
-
-            let ref_path = sub_paths
+            let segment_map: FnvHashMap<usize, &[u8]> = gfa
+                .segments
                 .iter()
-                .find(|x| &x.path_name == &ref_path_name)
-                .unwrap();
-
-            let ref_path = ref_path.segment_ids().collect::<Vec<_>>();
-
-            let ref_seq: BString = ref_path
-                .iter()
-                .filter_map(|&id| {
-                    let seq = bubble_segs.get(&id)?;
-                    Some(seq.clone())
-                })
+                .map(|seg| (seg.name, seg.sequence.as_ref()))
                 .collect();
 
-            let query_path = sub_paths
-                .iter()
-                .find(|x| &x.path_name == &query_path_name)
-                .unwrap();
+            eprintln!("finding ultrabubbles");
+            let ultrabubbles = gfautil::ultrabubbles::gfa_ultrabubbles(&gfa);
+            eprintln!("found {} ultrabubbles", ultrabubbles.len());
 
-            let query_path = query_path.segment_ids().collect::<Vec<_>>();
-
-            let query_seq: BString = query_path
+            let ultrabubble_nodes = ultrabubbles
                 .iter()
-                .filter_map(|&id| {
-                    let seq = bubble_segs.get(&id)?;
-                    Some(seq.clone())
+                .flat_map(|&(a, b)| {
+                    use std::iter::once;
+                    once(a).chain(once(b))
                 })
-                .collect();
+                .collect::<FnvHashSet<_>>();
 
-            println!("{}\t{:?}", ref_path_name, ref_path);
-            println!("\t~~ {}", ref_seq);
+            for &(from, to) in ultrabubbles.iter() {
+                let sub_paths = variants::bubble_sub_paths(
+                    &gfa,
+                    from as usize,
+                    to as usize,
+                );
 
-            for q in ref_path.iter() {
-                print!(" {}", bubble_segs.get(q).unwrap());
-            }
-            println!();
-
-            println!("{}\t{:?}", query_path_name, query_path);
-            println!("\t~~ {}", query_seq);
-            for q in query_path.iter() {
-                print!(" {}", bubble_segs.get(q).unwrap());
-            }
-            println!();
-
-            let vars = variants::detect_variants_against_ref(
-                &bubble_segs,
-                &ref_path_name,
-                &ref_path,
-                &query_path,
-            );
-
-            let mut print_header = true;
-            for (key, var) in vars {
-                let ref_name = &key.ref_name;
-                let seq = &key.sequence;
-                let pos = key.pos;
-                let spacing = std::iter::repeat(b' ')
-                    .take(ref_name.len())
-                    .collect::<BString>();
-                if print_header {
-                    println!("{} pos\tseq\tvar", spacing);
-                    print_header = false;
+                let vars = variants::detect_variants_in_sub_paths(
+                    &segment_map,
+                    &sub_paths,
+                );
+                for (path, var_set) in vars {
+                    println!("Path {}", path);
+                    for (key, var) in var_set {
+                        let seq = &key.sequence;
+                        let pos = key.pos;
+                        println!("  {}\t{}\t{}", pos, seq, var);
+                    }
+                    println!();
                 }
-                println!("{}:{}\t{}\t{}", ref_name, pos, seq, var);
-            }
-            */
-
-            let vars = variants::detect_variants_in_sub_paths(
-                &bubble_segs,
-                &sub_paths,
-            );
-
-            for (path, var_set) in vars {
-                println!("Path {}", path);
-                for (key, var) in var_set {
-                    let seq = &key.sequence;
-                    let pos = key.pos;
-                    println!("  {}\t{}\t{}", pos, seq, var);
-                }
-                println!();
             }
         }
 

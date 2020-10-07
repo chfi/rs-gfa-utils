@@ -173,7 +173,7 @@ impl std::fmt::Display for Variant {
 }
 
 pub fn detect_variants_against_ref(
-    segment_sequences: &FnvHashMap<usize, BString>,
+    segment_sequences: &FnvHashMap<usize, &[u8]>,
     ref_name: &[u8],
     ref_path: &[usize],
     query_path: &[usize],
@@ -274,14 +274,14 @@ pub fn detect_variants_against_ref(
                 let var_key = VariantKey {
                     ref_name: ref_name.into(),
                     pos: ref_seq_ix + 1,
-                    sequence: ref_seq.clone(),
+                    sequence: ref_seq.as_bstr().to_owned(),
                 };
 
                 let variant = if ref_seq.len() == 1 {
                     let last_query_seq: u8 = *query_seq.last().unwrap();
                     Variant::Snv(last_query_seq)
                 } else {
-                    Variant::Mnv(query_seq.clone())
+                    Variant::Mnv(query_seq.as_bstr().to_owned())
                 };
 
                 variants.insert(var_key, variant);
@@ -299,7 +299,7 @@ pub fn detect_variants_against_ref(
 }
 
 pub fn detect_variants_in_sub_paths(
-    segment_sequences: &FnvHashMap<usize, BString>,
+    segment_sequences: &FnvHashMap<usize, &[u8]>,
     sub_paths: &[SubPath<'_>],
 ) -> FnvHashMap<BString, FnvHashMap<VariantKey, Variant>> {
     let mut variants = FnvHashMap::default();
