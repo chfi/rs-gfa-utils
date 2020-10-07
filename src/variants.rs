@@ -177,8 +177,8 @@ pub fn detect_variants_against_ref(
     ref_name: &[u8],
     ref_path: &[usize],
     query_path: &[usize],
-) -> FnvHashMap<VariantKey, Variant> {
-    let mut variants = FnvHashMap::default();
+) -> FnvHashMap<VariantKey, FnvHashSet<Variant>> {
+    let mut variants: FnvHashMap<_, FnvHashSet<_>> = FnvHashMap::default();
 
     let mut ref_ix = 0;
     let mut query_ix = 0;
@@ -235,7 +235,9 @@ pub fn detect_variants_against_ref(
                 };
 
                 let variant = Variant::Del(BString::from(&[last_prev_seq][..]));
-                variants.insert(var_key, variant);
+
+                let entry = variants.entry(var_key).or_default();
+                entry.insert(variant);
 
                 ref_ix += 1;
                 ref_seq_ix += ref_seq.len();
@@ -266,7 +268,8 @@ pub fn detect_variants_against_ref(
                     .collect();
                 let variant = Variant::Ins(var_seq);
 
-                variants.insert(var_key, variant);
+                let entry = variants.entry(var_key).or_default();
+                entry.insert(variant);
 
                 query_ix += 1;
                 query_seq_ix += query_seq.len();
@@ -284,7 +287,8 @@ pub fn detect_variants_against_ref(
                     Variant::Mnv(query_seq.as_bstr().to_owned())
                 };
 
-                variants.insert(var_key, variant);
+                let entry = variants.entry(var_key).or_default();
+                entry.insert(variant);
 
                 ref_ix += 1;
                 ref_seq_ix += ref_seq.len();
@@ -301,7 +305,7 @@ pub fn detect_variants_against_ref(
 pub fn detect_variants_in_sub_paths(
     segment_sequences: &FnvHashMap<usize, &[u8]>,
     sub_paths: &[SubPath<'_>],
-) -> FnvHashMap<BString, FnvHashMap<VariantKey, Variant>> {
+) -> FnvHashMap<BString, FnvHashMap<VariantKey, FnvHashSet<Variant>>> {
     let mut variants = FnvHashMap::default();
 
     for ref_path in sub_paths.iter() {
@@ -325,6 +329,52 @@ pub fn detect_variants_in_sub_paths(
     }
 
     variants
+}
+
+pub fn variant_vcf_record(
+    variants: &FnvHashMap<BString, FnvHashMap<VariantKey, FnvHashSet<Variant>>>,
+) -> Vec<VCFRecord> {
+    let mut vcf_records = Vec::new();
+
+    for (_, variant_map) in variants.iter() {
+        for (key, var_set) in variant_map.iter() {
+            let (alt_list, type_set): (Vec<BString>, Vec<BString>) = var_set
+                .iter()
+                .map(|var| match var {
+                    Variant::Del(seq) => (seq.clone(), "del".into()),
+                    Variant::Ins(seq) => (seq.clone(), "ins".into()),
+                    Variant::Snv(base) => {
+                        let base_seq =
+                            std::iter::once(*base).collect::<BString>();
+                        (base_seq, "snv".into())
+                    }
+                    Variant::Mnv(seq) => (seq.clone(), "mnv".into()),
+                })
+                .unzip();
+
+            let alts = bstr::join(",", alt_list);
+            let mut types: BString = "TYPE=".into();
+            let types_temp = bstr::join(";TYPE=", type_set);
+            types.extend(types_temp);
+
+            let vcf = VCFRecord {
+                chromosome: key.ref_name.clone(),
+                position: key.pos as i64,
+                id: None,
+                reference: key.sequence.clone(),
+                alternate: Some(alts.into()),
+                quality: None,
+                filter: None,
+                info: Some(types),
+                format: Some("GT".into()),
+                sample_name: Some("0|1".into()),
+            };
+
+            vcf_records.push(vcf);
+        }
+    }
+
+    vcf_records
 }
 
 // Finds all the nodes between two given nodes
@@ -426,7 +476,7 @@ where
 #[derive(Debug, PartialEq)]
 pub struct VCFRecord {
     chromosome: BString,
-    position: i32,
+    position: i64,
     id: Option<BString>,
     reference: BString,
     alternate: Option<BString>,
@@ -456,6 +506,6 @@ impl std::fmt::Display for VCFRecord {
         write!(f, "{}\t", display_field(self.filter.as_ref()))?;
         write!(f, "{}\t", display_field(self.info.as_ref()))?;
         write!(f, "{}\t", display_field(self.format.as_ref()))?;
-        writeln!(f, "{}", display_field(self.sample_name.as_ref()))
+        write!(f, "{}", display_field(self.sample_name.as_ref()))
     }
 }

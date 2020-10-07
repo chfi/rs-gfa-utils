@@ -180,14 +180,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &segment_map,
                     &sub_paths,
                 );
-                for (path, var_set) in vars {
-                    println!("Path {}", path);
-                    for (key, var) in var_set {
-                        let seq = &key.sequence;
-                        let pos = key.pos;
-                        println!("  {}\t{}\t{}", pos, seq, var);
-                    }
-                    println!();
+
+                let vcf_records = variants::variant_vcf_record(&vars);
+                for vcf in vcf_records {
+                    println!("{}", vcf);
                 }
             }
         }
