@@ -75,9 +75,12 @@ pub fn bubble_sub_paths<T: OptFields>(
             let &((first, _), _) = steps.peek()?;
             let end = if first == from { to } else { from };
 
+            let mut found_end = false;
+
             let steps: Vec<_> = steps
                 .scan(first, |previous, ((step, orient), overlap)| {
                     if *previous == end {
+                        found_end = true;
                         None
                     } else {
                         *previous = step;
@@ -85,6 +88,10 @@ pub fn bubble_sub_paths<T: OptFields>(
                     }
                 })
                 .collect();
+
+            if !found_end {
+                return None;
+            }
 
             Some(SubPath {
                 path_name: path.path_name.clone(),
