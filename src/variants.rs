@@ -1,10 +1,8 @@
-use handlegraph::{handle::*, handlegraph::*, hashgraph::HashGraph};
+use handlegraph::{handle::*, handlegraph::*};
 
 use fnv::{FnvHashMap, FnvHashSet};
 
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-
-use bstr::{BStr, BString, ByteSlice, ByteVec};
+use bstr::{BStr, BString, ByteSlice};
 
 use bio::alphabets::dna;
 
@@ -36,6 +34,62 @@ pub fn oriented_sequence<T: AsRef<[u8]>>(
     } else {
         seq.into()
     }
+}
+
+pub fn bubble_path_indices(
+    paths: &FnvHashMap<BString, Vec<(usize, usize, Orientation)>>,
+    // paths: &FnvHashMap<BString, Vec<(usize, usize)>>,
+    vertices: &FnvHashSet<u64>,
+) -> FnvHashMap<u64, FnvHashMap<BString, usize>> {
+    let mut path_map: FnvHashMap<u64, FnvHashMap<BString, usize>> =
+        FnvHashMap::default();
+
+    for &node in vertices.iter() {
+        for (path_name, path) in paths.iter() {
+            let node_ix = path.iter().position(|&(x, _, _)| x == node as usize);
+            if let Some(ix) = node_ix {
+                let path_name = path_name.clone().to_owned();
+                let entry = path_map.entry(node).or_default();
+                entry.insert(path_name, ix);
+            }
+        }
+    }
+
+    path_map
+}
+    gfa: &GFA<usize, ()>,
+    seg_seq_map: &FnvHashMap<usize, &[u8]>,
+) -> FnvHashMap<BString, Vec<(usize, Orientation, usize)>> {
+    gfa.paths
+        .iter()
+        .map(|path| {
+            let name = path.path_name.clone();
+            let steps: Vec<(usize, Orientation, usize)> = path
+                .iter()
+                .scan(0, |offset, (step, orient)| {
+                    let step_offset = *offset;
+                    let step_len = seg_seq_map.get(&step).unwrap().len();
+                    *offset += step_len;
+                    Some((step, orient, step_offset))
+                })
+                .collect();
+
+            (name, steps)
+        })
+        .collect()
+}
+
+pub fn gfa_paths<T: OptFields>(
+    gfa: &GFA<usize, T>,
+) -> FnvHashMap<BString, Vec<(usize, Orientation)>> {
+    gfa.paths
+        .iter()
+        .map(|path| {
+            let name = path.path_name.clone();
+            let steps = path.iter().collect::<Vec<_>>();
+            (name, steps)
+        })
+        .collect()
 }
 
 pub fn path_segments_sequences<'a, T, I>(
