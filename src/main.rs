@@ -1,7 +1,7 @@
 use clap::arg_enum;
 use structopt::{clap::ArgGroup, StructOpt};
 
-use bstr::{io::*, BString, ByteSlice, ByteVec};
+use bstr::{io::*, BStr, BString, ByteSlice, ByteVec};
 use std::{
     fs::File,
     io::{BufReader, Read, Write},
@@ -157,6 +157,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|seg| (seg.name, seg.sequence.as_ref()))
                 .collect();
 
+            let mut all_paths =
+                variants::gfa_paths_with_offsets(&gfa, &segment_map);
+
             eprintln!("finding ultrabubbles");
             let ultrabubbles = gfautil::ultrabubbles::gfa_ultrabubbles(&gfa);
             eprintln!("found {} ultrabubbles", ultrabubbles.len());
@@ -169,16 +172,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 })
                 .collect::<FnvHashSet<_>>();
 
-            for &(from, to) in ultrabubbles.iter() {
-                let sub_paths = variants::bubble_sub_paths(
-                    &gfa,
-                    from as usize,
-                    to as usize,
-                );
+            let path_indices =
+                variants::bubble_path_indices(&all_paths, &ultrabubble_nodes);
 
+            for &(from, to) in ultrabubbles.iter() {
                 let vars = variants::detect_variants_in_sub_paths(
                     &segment_map,
-                    &sub_paths,
+                    &all_paths,
+                    &path_indices,
+                    from,
+                    to,
                 );
 
                 let vcf_records = variants::variant_vcf_record(&vars);
