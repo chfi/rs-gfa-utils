@@ -126,7 +126,7 @@ enum Command {
     #[structopt(name = "gaf2paf")]
     Gaf2Paf(GAF2PAFArgs),
     GfaSegmentIdConversion(GfaIdConvertOptions),
-    #[structopt(name = "gaf2vcf")]
+    #[structopt(name = "gfa2vcf")]
     GfaToVcf(GFAToVCFArgs),
 }
 
