@@ -157,13 +157,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|seg| (seg.name, seg.sequence.as_ref()))
                 .collect();
 
-            let mut all_paths =
+            let all_paths =
                 variants::gfa_paths_with_offsets(&gfa, &segment_map);
 
-            eprintln!("finding ultrabubbles");
             let ultrabubbles = gfautil::ultrabubbles::gfa_ultrabubbles(&gfa);
-            eprintln!("found {} ultrabubbles", ultrabubbles.len());
-
             let ultrabubble_nodes = ultrabubbles
                 .iter()
                 .flat_map(|&(a, b)| {
@@ -175,6 +172,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let path_indices =
                 variants::bubble_path_indices(&all_paths, &ultrabubble_nodes);
 
+            let mut all_vcf_records = Vec::new();
+
             for &(from, to) in ultrabubbles.iter() {
                 let vars = variants::detect_variants_in_sub_paths(
                     &segment_map,
@@ -185,9 +184,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
 
                 let vcf_records = variants::variant_vcf_record(&vars);
-                for vcf in vcf_records {
-                    println!("{}", vcf);
-                }
+                all_vcf_records.extend(vcf_records);
+
+                /*
+                let from_indices = path_indices.get(&from).unwrap();
+                let to_indices = path_indices.get(&to).unwrap();
+
+                let sub_paths: FnvHashMap<
+                    &BStr,
+                    &[(usize, usize, Orientation)],
+                > = all_paths
+                    .iter()
+                    .filter_map(|(path_name, path)| {
+                        let from_ix = *from_indices.get(path_name)?;
+                        let to_ix = *to_indices.get(path_name)?;
+                        let from = from_ix.min(to_ix);
+                        let to = from_ix.max(to_ix);
+                        let sub_path = &path[from..=to];
+                        Some((path_name.as_bstr(), sub_path))
+                    })
+                    .collect();
+                */
+            }
+
+            all_vcf_records.sort_by(|v0, v1| v0.vcf_cmp(v1));
+
+            for vcf in all_vcf_records {
+                println!("{}", vcf);
             }
         }
 

@@ -214,7 +214,7 @@ pub enum Variant {
     Del(BString),
     Ins(BString),
     Snv(u8),
-    Mnv(BString),
+    Mnp(BString),
 }
 
 impl std::fmt::Display for Variant {
@@ -223,7 +223,7 @@ impl std::fmt::Display for Variant {
             Variant::Del(b) => write!(f, "Del({})", b),
             Variant::Ins(b) => write!(f, "Ins({})", b),
             Variant::Snv(b) => write!(f, "Snv({})", char::from(*b)),
-            Variant::Mnv(b) => write!(f, "Mnv({})", b),
+            Variant::Mnp(b) => write!(f, "Mnp({})", b),
         }
     }
 }
@@ -338,7 +338,7 @@ pub fn detect_variants_against_ref(
                         let last_query_seq: u8 = *query_seq.last().unwrap();
                         Variant::Snv(last_query_seq)
                     } else {
-                        Variant::Mnv(query_seq.as_bstr().to_owned())
+                        Variant::Mnp(query_seq.as_bstr().to_owned())
                     };
 
                     let entry = variants.entry(var_key).or_default();
@@ -429,7 +429,7 @@ pub fn variant_vcf_record(
                             std::iter::once(*base).collect::<BString>();
                         (base_seq, "snv".into())
                     }
-                    Variant::Mnv(seq) => (seq.clone(), "mnv".into()),
+                    Variant::Mnp(seq) => (seq.clone(), "mnp".into()),
                 })
                 .unzip();
 
@@ -447,8 +447,8 @@ pub fn variant_vcf_record(
                 quality: None,
                 filter: None,
                 info: Some(types),
-                format: Some("GT".into()),
-                sample_name: Some("0|1".into()),
+                format: None,
+                sample_name: None,
             };
 
             vcf_records.push(vcf);
@@ -568,6 +568,18 @@ pub struct VCFRecord {
     sample_name: Option<BString>,
 }
 
+impl VCFRecord {
+    pub fn vcf_cmp(&self, other: &VCFRecord) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        let chr_cmp = self.chromosome.cmp(&other.chromosome);
+        if let Ordering::Equal = chr_cmp {
+            self.position.cmp(&other.position)
+        } else {
+            chr_cmp
+        }
+    }
+}
+
 impl std::fmt::Display for VCFRecord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fn display_field<T: std::fmt::Display>(field: Option<T>) -> String {
@@ -585,8 +597,13 @@ impl std::fmt::Display for VCFRecord {
         write!(f, "{}\t", display_field(self.alternate.as_ref()))?;
         write!(f, "{}\t", display_field(self.quality.as_ref()))?;
         write!(f, "{}\t", display_field(self.filter.as_ref()))?;
-        write!(f, "{}\t", display_field(self.info.as_ref()))?;
-        write!(f, "{}\t", display_field(self.format.as_ref()))?;
-        write!(f, "{}", display_field(self.sample_name.as_ref()))
+        write!(f, "{}", display_field(self.info.as_ref()))?;
+        if let Some(format) = self.format.as_ref() {
+            if let Some(sample) = self.sample_name.as_ref() {
+                write!(f, "\t{}", format)?;
+                write!(f, "\t{}", sample)?;
+            }
+        }
+        Ok(())
     }
 }
