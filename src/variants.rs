@@ -38,7 +38,6 @@ pub fn oriented_sequence<T: AsRef<[u8]>>(
 
 pub fn bubble_path_indices(
     paths: &FnvHashMap<BString, Vec<(usize, usize, Orientation)>>,
-    // paths: &FnvHashMap<BString, Vec<(usize, usize)>>,
     vertices: &FnvHashSet<u64>,
 ) -> FnvHashMap<u64, FnvHashMap<BString, usize>> {
     let mut path_map: FnvHashMap<u64, FnvHashMap<BString, usize>> =
@@ -363,7 +362,35 @@ fn sub_path_edge_orient(
     (from, to)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VariantConfig {
+    pub ignore_inverted_paths: bool,
+}
+
+impl VariantConfig {
+    pub fn ignore_path(
+        &self,
+        ref_orient: (Orientation, Orientation),
+        query_orient: (Orientation, Orientation),
+    ) -> bool {
+        if self.ignore_inverted_paths {
+            ref_orient != query_orient
+        } else {
+            false
+        }
+    }
+}
+
+impl Default for VariantConfig {
+    fn default() -> Self {
+        Self {
+            ignore_inverted_paths: true,
+        }
+    }
+}
+
 pub fn detect_variants_in_sub_paths(
+    variant_config: &VariantConfig,
     segment_sequences: &FnvHashMap<usize, &[u8]>,
     paths: &FnvHashMap<BString, Vec<(usize, usize, Orientation)>>,
     path_indices: &FnvHashMap<u64, FnvHashMap<BString, usize>>,
@@ -393,7 +420,9 @@ pub fn detect_variants_in_sub_paths(
         for (query_name, query_path) in sub_paths.iter() {
             let query_orient = sub_path_edge_orient(query_path);
 
-            if ref_name != query_name && ref_orient == query_orient {
+            if ref_name != query_name
+                && !variant_config.ignore_path(ref_orient, query_orient)
+            {
                 let vars = detect_variants_against_ref(
                     segment_sequences,
                     ref_name,

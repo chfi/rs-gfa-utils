@@ -1,7 +1,7 @@
 use clap::arg_enum;
 use structopt::{clap::ArgGroup, StructOpt};
 
-use bstr::{io::*, BStr, BString, ByteSlice, ByteVec};
+use bstr::{io::*, BString, ByteSlice, ByteVec};
 use std::{
     fs::File,
     io::{BufReader, Read, Write},
@@ -9,7 +9,7 @@ use std::{
 };
 
 use gfa::{
-    gfa::{name_conversion::NameMap, Orientation, GFA},
+    gfa::{name_conversion::NameMap, GFA},
     optfields::OptionalFields,
     parser::GFAParser,
     writer::{gfa_string, write_gfa},
@@ -17,7 +17,7 @@ use gfa::{
 
 use fnv::{FnvHashMap, FnvHashSet};
 
-use handlegraph::{handle::NodeId, hashgraph::HashGraph};
+use handlegraph::hashgraph::HashGraph;
 
 use gfautil::{edges, gaf_convert, subgraph, variants};
 
@@ -87,7 +87,10 @@ struct GfaIdConvertOptions {
 
 #[derive(StructOpt, Debug)]
 struct VariantArgs {
-    ultrabubble_path: Option<PathBuf>,
+    /// Don't compare two paths if their start and end orientations
+    /// don't match each other
+    #[structopt(name = "ignore inverted paths", long = "no-inv")]
+    ignore_inverted_paths: bool,
 }
 
 fn gfa_to_name_map_path(path: &PathBuf) -> PathBuf {
@@ -174,8 +177,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let mut all_vcf_records = Vec::new();
 
+            let var_config = variants::VariantConfig {
+                ignore_inverted_paths: var_args.ignore_inverted_paths,
+            };
+
             for &(from, to) in ultrabubbles.iter() {
                 let vars = variants::detect_variants_in_sub_paths(
+                    &var_config,
                     &segment_map,
                     &all_paths,
                     &path_indices,
