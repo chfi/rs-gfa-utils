@@ -1,3 +1,7 @@
+pub mod vcf;
+
+use vcf::VCFRecord;
+
 use handlegraph::{handle::*, handlegraph::*};
 
 use fnv::{FnvHashMap, FnvHashSet};
@@ -238,7 +242,7 @@ pub fn detect_variants_against_ref(
     let mut ref_ix = 0;
     let mut query_ix = 0;
 
-    let mut ref_seq_ix = 0;
+    let mut ref_seq_ix;
 
     loop {
         if ref_ix >= ref_path.len() || query_ix >= query_path.len() {
@@ -250,7 +254,7 @@ pub fn detect_variants_against_ref(
 
         ref_seq_ix = ref_offset;
 
-        let (query_node, query_offset, _) = query_path[query_ix];
+        let (query_node, _query_offset, _) = query_path[query_ix];
         let query_seq = segment_sequences.get(&query_node).unwrap();
 
         if ref_node == query_node {
@@ -261,13 +265,13 @@ pub fn detect_variants_against_ref(
             {
                 break;
             }
-            let (next_ref_node, next_ref_offset, _) = ref_path[ref_ix + 1];
-            let (next_query_node, next_query_offset, _) =
+            let (next_ref_node, _next_ref_offset, _) = ref_path[ref_ix + 1];
+            let (next_query_node, _next_query_offset, _) =
                 query_path[query_ix + 1];
 
             if next_ref_node == query_node {
                 // Deletion
-                let (prev_ref_node, prev_ref_offset, _) = if ref_ix == 0 {
+                let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
                     ref_path[ref_ix]
                 } else {
                     ref_path[ref_ix - 1]
@@ -297,7 +301,7 @@ pub fn detect_variants_against_ref(
             } else if next_query_node == ref_node {
                 // Insertion
 
-                let (prev_ref_node, prev_ref_offset, _) = if ref_ix == 0 {
+                let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
                     ref_path[ref_ix]
                 } else {
                     ref_path[ref_ix - 1]
@@ -580,59 +584,4 @@ where
     }
 
     paths
-}
-
-/// A struct that holds Variants, as defined in the VCF format
-#[derive(Debug, PartialEq)]
-pub struct VCFRecord {
-    chromosome: BString,
-    position: i64,
-    id: Option<BString>,
-    reference: BString,
-    alternate: Option<BString>,
-    quality: Option<i32>,
-    filter: Option<BString>,
-    info: Option<BString>,
-    format: Option<BString>,
-    sample_name: Option<BString>,
-}
-
-impl VCFRecord {
-    pub fn vcf_cmp(&self, other: &VCFRecord) -> std::cmp::Ordering {
-        use std::cmp::Ordering;
-        let chr_cmp = self.chromosome.cmp(&other.chromosome);
-        if let Ordering::Equal = chr_cmp {
-            self.position.cmp(&other.position)
-        } else {
-            chr_cmp
-        }
-    }
-}
-
-impl std::fmt::Display for VCFRecord {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn display_field<T: std::fmt::Display>(field: Option<T>) -> String {
-            if let Some(x) = field {
-                x.to_string()
-            } else {
-                ".".to_string()
-            }
-        }
-
-        write!(f, "{}\t", self.chromosome)?;
-        write!(f, "{}\t", self.position)?;
-        write!(f, "{}\t", display_field(self.id.as_ref()))?;
-        write!(f, "{}\t", self.reference)?;
-        write!(f, "{}\t", display_field(self.alternate.as_ref()))?;
-        write!(f, "{}\t", display_field(self.quality.as_ref()))?;
-        write!(f, "{}\t", display_field(self.filter.as_ref()))?;
-        write!(f, "{}", display_field(self.info.as_ref()))?;
-        if let Some(format) = self.format.as_ref() {
-            if let Some(sample) = self.sample_name.as_ref() {
-                write!(f, "\t{}", format)?;
-                write!(f, "\t{}", sample)?;
-            }
-        }
-        Ok(())
-    }
 }

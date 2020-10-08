@@ -1,6 +1,6 @@
 [package]
 name = "gfautil"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["christian <christian@chfi.se>"]
 description = "Command line tools for working with GFA files and related formats."
 edition = "2018"
@@ -21,12 +21,12 @@ itertools = "0.9"
 
 clap = "2.33"
 structopt = "0.3"
+chrono = "0.4"
 
 bio = "0.32"
-rs-cactusgraph = { path = "../rs-cactusgraph" }
 gfa = "0.8"
-# handlegraph = "0.4"
-handlegraph = { path = "../rs-handlegraph" }
+handlegraph = "0.5"
+saboten = "0.0.1"
 
 
 [[bin]]

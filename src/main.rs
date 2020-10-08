@@ -65,7 +65,7 @@ struct GAF2PAFArgs {
 
 #[derive(StructOpt, Debug)]
 /// Convert a GFA with string names to one with integer names, and
-/// back. If a
+/// back.
 struct GfaIdConvertOptions {
     /// Path to a name map that was previously generated for the given GFA.
     /// Required if transforming to the original segment names. If not
@@ -216,6 +216,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             all_vcf_records.sort_by(|v0, v1| v0.vcf_cmp(v1));
+
+            let vcf_header = variants::vcf::VCFHeader::new(&opt.in_gfa);
+
+            println!("{}", vcf_header);
 
             for vcf in all_vcf_records {
                 println!("{}", vcf);
