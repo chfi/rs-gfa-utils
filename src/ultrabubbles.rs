@@ -1,13 +1,11 @@
-use rs_cactusgraph::{
-    biedgedgraph,
+use saboten::{
     biedgedgraph::*,
     cactusgraph,
-    cactusgraph::{BiedgedWrapper, BridgeForest, CactusGraph, CactusTree},
-    ultrabubble::{ChainEdge, ChainPair, Snarl},
+    cactusgraph::{BridgeForest, CactusGraph, CactusTree},
 };
 
-use fnv::{FnvHashMap, FnvHashSet};
-use gfa::{gfa::GFA, optfields::OptFields, parser::GFAParser};
+use fnv::FnvHashSet;
+use gfa::gfa::GFA;
 
 pub fn gfa_ultrabubbles(gfa: &GFA<usize, ()>) -> FnvHashSet<(u64, u64)> {
     let be_graph = BiedgedGraph::from_gfa(gfa);
@@ -24,5 +22,5 @@ pub fn gfa_ultrabubbles(gfa: &GFA<usize, ()>) -> FnvHashSet<(u64, u64)> {
 
     let ultrabubbles = cactusgraph::inverse_map_ultrabubbles(ultrabubbles);
 
-    ultrabubbles.into_iter().map(|(x_y, cont)| x_y).collect()
+    ultrabubbles.into_iter().map(|(x_y, _cont)| x_y).collect()
 }

@@ -85,8 +85,10 @@ struct GfaIdConvertOptions {
     check_hash: bool,
 }
 
+/// Output a VCF for the given GFA, using the graph's ultrabubbles to
+/// identify areas of variation. (experimental!)
 #[derive(StructOpt, Debug)]
-struct VariantArgs {
+struct GFAToVCFArgs {
     /// Don't compare two paths if their start and end orientations
     /// don't match each other
     #[structopt(name = "ignore inverted paths", long = "no-inv")]
@@ -124,7 +126,8 @@ enum Command {
     #[structopt(name = "gaf2paf")]
     Gaf2Paf(GAF2PAFArgs),
     GfaSegmentIdConversion(GfaIdConvertOptions),
-    Variant(VariantArgs),
+    #[structopt(name = "gaf2vcf")]
+    GfaToVcf(GFAToVCFArgs),
 }
 
 #[derive(StructOpt, Debug)]
@@ -150,7 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
 
     match opt.command {
-        Command::Variant(var_args) => {
+        Command::GfaToVcf(var_args) => {
             let parser = GFAParser::new();
             let gfa: GFA<usize, ()> = parser.parse_file(&opt.in_gfa).unwrap();
 
