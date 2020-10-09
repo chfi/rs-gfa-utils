@@ -138,6 +138,19 @@ enum Command {
 }
 
 #[derive(StructOpt, Debug)]
+struct LogOpt {
+    /// Show no messages.
+    #[structopt(long)]
+    quiet: bool,
+    /// Show info messages.
+    #[structopt(long)]
+    info: bool,
+    /// Show debug messages.
+    #[structopt(long)]
+    debug: bool,
+}
+
+#[derive(StructOpt, Debug)]
 struct Opt {
     #[structopt(
         name = "input GFA file",
@@ -148,6 +161,24 @@ struct Opt {
     in_gfa: PathBuf,
     #[structopt(subcommand)]
     command: Command,
+    #[structopt(flatten)]
+    log_opts: LogOpt,
+}
+
+fn init_logger(opt: &LogOpt) {
+    let mut builder = pretty_env_logger::formatted_builder();
+    if !opt.quiet {
+        let mut log_level = log::LevelFilter::Error;
+        if opt.info {
+            log_level = log::LevelFilter::Info;
+        }
+        if opt.debug {
+            log_level = log::LevelFilter::Debug;
+        }
+        builder.filter_level(log_level);
+    }
+
+    builder.init();
 }
 
 fn byte_lines_iter<'a, R: Read + 'a>(
@@ -158,6 +189,8 @@ fn byte_lines_iter<'a, R: Read + 'a>(
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
+
+    init_logger(&opt.log_opts);
 
     match opt.command {
         Command::GfaToVcf(var_args) => {
