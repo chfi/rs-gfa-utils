@@ -9,8 +9,8 @@ use std::{
 };
 
 use gfa::{
-    gfa::{name_conversion::NameMap, GFA},
-    optfields::OptionalFields,
+    gfa::{name_conversion::NameMap, SegmentId, GFA},
+    optfields::{OptFields, OptionalFields},
     parser::GFAParser,
     writer::{gfa_string, write_gfa},
 };
@@ -20,6 +20,10 @@ use fnv::{FnvHashMap, FnvHashSet};
 use handlegraph::hashgraph::HashGraph;
 
 use gfautil::{edges, gaf_convert, subgraph, variants};
+
+use log::{debug, info, warn};
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 arg_enum! {
     #[derive(Debug, PartialEq)]
@@ -187,15 +191,26 @@ fn byte_lines_iter<'a, R: Read + 'a>(
     Box::new(BufReader::new(reader).byte_lines().map(|l| l.unwrap()))
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn load_gfa<N, T, P>(path: P) -> Result<GFA<N, T>>
+where
+    N: SegmentId,
+    T: OptFields,
+    P: AsRef<std::path::Path>,
+{
+    let parser = GFAParser::new();
+    info!("Parsing GFA from {}", path.as_ref().display());
+    let gfa = parser.parse_file(path.as_ref())?;
+    Ok(gfa)
+}
+
+fn main() -> Result<()> {
     let opt = Opt::from_args();
 
     init_logger(&opt.log_opts);
 
     match opt.command {
         Command::GfaToVcf(var_args) => {
-            let parser = GFAParser::new();
-            let gfa: GFA<usize, ()> = parser.parse_file(&opt.in_gfa).unwrap();
+            let gfa: GFA<usize, ()> = load_gfa(&opt.in_gfa)?;
 
             let segment_map: FnvHashMap<usize, &[u8]> = gfa
                 .segments
@@ -276,9 +291,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Command::Subgraph(subgraph_args) => {
-            let parser = GFAParser::new();
-            let gfa: GFA<BString, OptionalFields> =
-                parser.parse_file(&opt.in_gfa).unwrap();
+            let gfa: GFA<BString, OptionalFields> = load_gfa(&opt.in_gfa)?;
 
             let names: Vec<Vec<u8>> = if let Some(list) = subgraph_args.list {
                 list.into_iter().map(|s| s.bytes().collect()).collect()
@@ -311,9 +324,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", gfa_string(&new_gfa));
         }
         Command::Gaf2Paf(args) => {
-            let parser = GFAParser::new();
-            let gfa: GFA<BString, OptionalFields> =
-                parser.parse_file(&opt.in_gfa).unwrap();
+            let gfa: GFA<BString, OptionalFields> = load_gfa(&opt.in_gfa)?;
+
             let paf_lines = gaf_convert::gaf_to_paf(gfa, &args.gaf);
 
             if let Some(out_path) = args.out {
@@ -328,8 +340,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Command::EdgeCount => {
-            let parser = GFAParser::new();
-            let gfa: GFA<usize, ()> = parser.parse_file(&opt.in_gfa).unwrap();
+            let gfa: GFA<usize, ()> = load_gfa(&opt.in_gfa)?;
 
             let hashgraph = HashGraph::from_gfa(&gfa);
             let edge_counts = edges::graph_edge_count(&hashgraph);
@@ -345,9 +356,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             if conv_opt.to_usize {
-                let parser = GFAParser::new();
-                let gfa: GFA<BString, OptionalFields> =
-                    parser.parse_file(&opt.in_gfa).unwrap();
+                let gfa: GFA<BString, OptionalFields> = load_gfa(&opt.in_gfa)?;
 
                 let name_map = if let Some(ref path) = conv_opt.name_map_path {
                     let map = NameMap::load_json(&path)?;
@@ -387,9 +396,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .expect("Need name map to convert back");
                 let name_map = NameMap::load_json(&name_map_path)?;
 
-                let parser = GFAParser::new();
-                let gfa: GFA<usize, OptionalFields> =
-                    parser.parse_file(&opt.in_gfa).unwrap();
+                let gfa: GFA<usize, OptionalFields> = load_gfa(&opt.in_gfa)?;
 
                 let new_gfa: GFA<BString, OptionalFields> =
                     name_map.gfa_usize_to_bstring(&gfa).expect(

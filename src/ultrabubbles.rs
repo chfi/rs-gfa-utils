@@ -10,21 +10,30 @@ use std::{fs::File, io::BufReader, path::Path};
 
 use bstr::{io::BufReadExt, BStr, BString, ByteSlice, ByteVec};
 
+use log::{debug, info, warn};
+
 pub fn gfa_ultrabubbles(gfa: &GFA<usize, ()>) -> FnvHashSet<(u64, u64)> {
+    info!("Computing ultrabubbles");
+    debug!("Building biedged graph");
     let be_graph = BiedgedGraph::from_gfa(gfa);
     let orig_graph = be_graph.clone();
 
+    debug!("Building cactus graph");
     let cactus_graph = CactusGraph::from_biedged_graph(&orig_graph);
 
+    debug!("Building cactus tree");
     let cactus_tree = CactusTree::from_cactus_graph(&cactus_graph);
 
+    debug!("Building bridge forest");
     let bridge_forest = BridgeForest::from_cactus_graph(&cactus_graph);
 
+    debug!("Finding ultrabubbles");
     let ultrabubbles =
         cactusgraph::find_ultrabubbles_par(&cactus_tree, &bridge_forest);
 
     let ultrabubbles = cactusgraph::inverse_map_ultrabubbles(ultrabubbles);
 
+    debug!("Done computing ultrabubbles");
     ultrabubbles.into_iter().map(|(x_y, _cont)| x_y).collect()
 }
 
@@ -33,6 +42,7 @@ static LINE_ERROR: &str = "Ultrabubble record was missing fields";
 pub fn load_ultrabubbles<P: AsRef<Path>>(
     path: P,
 ) -> Result<FnvHashSet<(u64, u64)>, Box<dyn std::error::Error>> {
+    info!("Loading ultrabubbles from file {}", path.as_ref().display());
     let file = File::open(path.as_ref())?;
     let reader = BufReader::new(file);
     let lines = reader.byte_lines();
