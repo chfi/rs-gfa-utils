@@ -89,6 +89,13 @@ struct GfaIdConvertOptions {
 /// identify areas of variation. (experimental!)
 #[derive(StructOpt, Debug)]
 struct GFAToVCFArgs {
+    /// Load ultrabubbles from a file instead of calculating them.
+    #[structopt(
+        name = "ultrabubbles file",
+        long = "ultrabubbles",
+        short = "ub"
+    )]
+    ultrabubbles_file: Option<PathBuf>,
     /// Don't compare two paths if their start and end orientations
     /// don't match each other
     #[structopt(name = "ignore inverted paths", long = "no-inv")]
@@ -166,7 +173,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let all_paths =
                 variants::gfa_paths_with_offsets(&gfa, &segment_map);
 
-            let ultrabubbles = gfautil::ultrabubbles::gfa_ultrabubbles(&gfa);
+            let ultrabubbles = if let Some(path) = var_args.ultrabubbles_file {
+                let ub = gfautil::ultrabubbles::load_ultrabubbles(path)?;
+                ub
+            } else {
+                gfautil::ultrabubbles::gfa_ultrabubbles(&gfa)
+            };
+
             let ultrabubble_nodes = ultrabubbles
                 .iter()
                 .flat_map(|&(a, b)| {
