@@ -7,6 +7,8 @@ use gfa::gfa::GFA;
 
 use crate::variants;
 
+use super::Result;
+
 /// Output a VCF for the given GFA, using the graph's ultrabubbles to
 /// identify areas of variation. (experimental!)
 #[derive(StructOpt, Debug)]
@@ -28,7 +30,7 @@ pub fn gfa2vcf<P: AsRef<std::path::Path>>(
     gfa_path: P,
     gfa: &GFA<usize, ()>,
     args: &GFA2VCFArgs,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let segment_map: FnvHashMap<usize, &[u8]> = gfa
         .segments
         .iter()

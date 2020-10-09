@@ -6,6 +6,8 @@ use gfa::{gfa::GFA, optfields::OptionalFields};
 
 use crate::gaf_convert;
 
+use super::Result;
+
 /// Convert a file of GAF records into PAF records.
 ///
 /// The provided GFA file should be the same as the one used to create the GAF.
@@ -20,7 +22,7 @@ pub struct GAF2PAFArgs {
 pub fn gaf2paf(
     gfa: GFA<BString, OptionalFields>,
     args: &GAF2PAFArgs,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let paf_lines = gaf_convert::gaf_to_paf(gfa, &args.gaf);
 
     if let Some(out_path) = &args.out {
