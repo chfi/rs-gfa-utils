@@ -15,11 +15,13 @@ use gfa::{
     writer::{gfa_string, write_gfa},
 };
 
-use fnv::{FnvHashMap, FnvHashSet};
-
 use handlegraph::hashgraph::HashGraph;
 
-use gfautil::{edges, gaf_convert, subgraph, variants};
+use gfautil::{edges, subgraph};
+
+use gfautil::commands;
+use gfautil::commands::*;
+use gfautil::commands::{gaf2paf::GAF2PAFArgs, gfa2vcf::GFA2VCFArgs};
 
 use log::{debug, info, warn};
 
@@ -56,17 +58,6 @@ struct SubgraphArgs {
     list: Option<Vec<String>>,
 }
 
-/// Convert a file of GAF records into PAF records.
-///
-/// The provided GFA file should be the same as the one used to create the GAF.
-#[derive(StructOpt, Debug)]
-struct GAF2PAFArgs {
-    #[structopt(name = "path to GAF file", long = "gaf", parse(from_os_str))]
-    gaf: PathBuf,
-    #[structopt(name = "PAF output paf", short = "o", long = "paf")]
-    out: Option<PathBuf>,
-}
-
 #[derive(StructOpt, Debug)]
 /// Convert a GFA with string names to one with integer names, and
 /// back.
@@ -87,23 +78,6 @@ struct GfaIdConvertOptions {
 
     #[structopt(name = "check result hash", long = "hash")]
     check_hash: bool,
-}
-
-/// Output a VCF for the given GFA, using the graph's ultrabubbles to
-/// identify areas of variation. (experimental!)
-#[derive(StructOpt, Debug)]
-struct GFAToVCFArgs {
-    /// Load ultrabubbles from a file instead of calculating them.
-    #[structopt(
-        name = "ultrabubbles file",
-        long = "ultrabubbles",
-        short = "ub"
-    )]
-    ultrabubbles_file: Option<PathBuf>,
-    /// Don't compare two paths if their start and end orientations
-    /// don't match each other
-    #[structopt(name = "ignore inverted paths", long = "no-inv")]
-    ignore_inverted_paths: bool,
 }
 
 fn gfa_to_name_map_path(path: &PathBuf) -> PathBuf {
@@ -138,7 +112,7 @@ enum Command {
     Gaf2Paf(GAF2PAFArgs),
     GfaSegmentIdConversion(GfaIdConvertOptions),
     #[structopt(name = "gfa2vcf")]
-    GfaToVcf(GFAToVCFArgs),
+    Gfa2Vcf(GFA2VCFArgs),
 }
 
 #[derive(StructOpt, Debug)]
@@ -209,85 +183,9 @@ fn main() -> Result<()> {
     init_logger(&opt.log_opts);
 
     match opt.command {
-        Command::GfaToVcf(var_args) => {
+        Command::Gfa2Vcf(var_args) => {
             let gfa: GFA<usize, ()> = load_gfa(&opt.in_gfa)?;
-
-            let segment_map: FnvHashMap<usize, &[u8]> = gfa
-                .segments
-                .iter()
-                .map(|seg| (seg.name, seg.sequence.as_ref()))
-                .collect();
-
-            let all_paths =
-                variants::gfa_paths_with_offsets(&gfa, &segment_map);
-
-            let ultrabubbles = if let Some(path) = var_args.ultrabubbles_file {
-                let ub = gfautil::ultrabubbles::load_ultrabubbles(path)?;
-                ub
-            } else {
-                gfautil::ultrabubbles::gfa_ultrabubbles(&gfa)
-            };
-
-            let ultrabubble_nodes = ultrabubbles
-                .iter()
-                .flat_map(|&(a, b)| {
-                    use std::iter::once;
-                    once(a).chain(once(b))
-                })
-                .collect::<FnvHashSet<_>>();
-
-            let path_indices =
-                variants::bubble_path_indices(&all_paths, &ultrabubble_nodes);
-
-            let mut all_vcf_records = Vec::new();
-
-            let var_config = variants::VariantConfig {
-                ignore_inverted_paths: var_args.ignore_inverted_paths,
-            };
-
-            for &(from, to) in ultrabubbles.iter() {
-                let vars = variants::detect_variants_in_sub_paths(
-                    &var_config,
-                    &segment_map,
-                    &all_paths,
-                    &path_indices,
-                    from,
-                    to,
-                );
-
-                let vcf_records = variants::variant_vcf_record(&vars);
-                all_vcf_records.extend(vcf_records);
-
-                /*
-                let from_indices = path_indices.get(&from).unwrap();
-                let to_indices = path_indices.get(&to).unwrap();
-
-                let sub_paths: FnvHashMap<
-                    &BStr,
-                    &[(usize, usize, Orientation)],
-                > = all_paths
-                    .iter()
-                    .filter_map(|(path_name, path)| {
-                        let from_ix = *from_indices.get(path_name)?;
-                        let to_ix = *to_indices.get(path_name)?;
-                        let from = from_ix.min(to_ix);
-                        let to = from_ix.max(to_ix);
-                        let sub_path = &path[from..=to];
-                        Some((path_name.as_bstr(), sub_path))
-                    })
-                    .collect();
-                */
-            }
-
-            all_vcf_records.sort_by(|v0, v1| v0.vcf_cmp(v1));
-
-            let vcf_header = variants::vcf::VCFHeader::new(&opt.in_gfa);
-
-            println!("{}", vcf_header);
-
-            for vcf in all_vcf_records {
-                println!("{}", vcf);
-            }
+            gfa2vcf::gfa2vcf(&opt.in_gfa, &gfa, &var_args)?;
         }
 
         Command::Subgraph(subgraph_args) => {
@@ -325,19 +223,7 @@ fn main() -> Result<()> {
         }
         Command::Gaf2Paf(args) => {
             let gfa: GFA<BString, OptionalFields> = load_gfa(&opt.in_gfa)?;
-
-            let paf_lines = gaf_convert::gaf_to_paf(gfa, &args.gaf);
-
-            if let Some(out_path) = args.out {
-                let mut out_file = File::create(&out_path)
-                    .expect("Error creating PAF output file");
-
-                paf_lines.iter().for_each(|p| {
-                    writeln!(out_file, "{}", p).unwrap();
-                });
-            } else {
-                paf_lines.iter().for_each(|p| println!("{}", p));
-            }
+            commands::gaf2paf::gaf2paf(gfa, &args)?;
         }
         Command::EdgeCount => {
             let gfa: GFA<usize, ()> = load_gfa(&opt.in_gfa)?;
