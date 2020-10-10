@@ -429,26 +429,37 @@ pub fn detect_variants_in_sub_paths(
     for (ref_name, ref_path) in sub_paths.iter() {
         debug!("Reference path {}", ref_name);
         let ref_orient = sub_path_edge_orient(ref_path);
-        for (query_name, query_path) in sub_paths.iter() {
-            debug!("\tQuery path {}", query_name);
-            let query_orient = sub_path_edge_orient(query_path);
 
-            if ref_name != query_name
-                && !variant_config.ignore_path(ref_orient, query_orient)
-            {
-                let vars = detect_variants_against_ref(
-                    segment_sequences,
-                    ref_name,
-                    ref_path,
-                    query_path,
-                );
+        let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
+            FnvHashMap::default();
 
-                let ref_name: BString = ref_name.clone().to_owned();
-                let var_map: &mut FnvHashMap<_, _> =
-                    variants.entry(ref_name).or_default();
-                var_map.extend(vars.into_iter());
-            }
-        }
+        ref_map.par_extend(
+            sub_paths
+                .par_iter()
+                .filter_map(|(query_name, query_path)| {
+                    debug!("\tQuery path {}", query_name);
+                    let query_orient = sub_path_edge_orient(query_path);
+
+                    if ref_name != query_name
+                        && !variant_config.ignore_path(ref_orient, query_orient)
+                    {
+                        let vars = detect_variants_against_ref(
+                            segment_sequences,
+                            ref_name,
+                            ref_path,
+                            query_path,
+                        );
+
+                        Some(vars)
+                    } else {
+                        None
+                    }
+                })
+                .flatten(),
+        );
+
+        let ref_name: BString = ref_name.clone().to_owned();
+        variants.insert(ref_name, ref_map);
     }
 
     variants
