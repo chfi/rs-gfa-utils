@@ -8,8 +8,9 @@ use fnv::FnvHashSet;
 use gfa::gfa::GFA;
 use std::{fs::File, io::BufReader, path::Path};
 
-use bstr::{io::BufReadExt, BStr, BString, ByteSlice, ByteVec};
+use bstr::{io::BufReadExt, ByteSlice};
 
+#[allow(unused_imports)]
 use log::{debug, info, warn};
 
 pub fn gfa_ultrabubbles(gfa: &GFA<usize, ()>) -> FnvHashSet<(u64, u64)> {

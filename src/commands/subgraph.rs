@@ -1,26 +1,16 @@
 use clap::arg_enum;
 use structopt::{clap::ArgGroup, StructOpt};
 
-use bstr::{io::*, BString, ByteSlice, ByteVec};
-use std::{
-    fs::File,
-    io::{BufReader, Read, Write},
-    path::PathBuf,
-};
+use bstr::{BString, ByteSlice, ByteVec};
+use std::{fs::File, path::PathBuf};
 
-use gfa::{
-    gfa::{name_conversion::NameMap, SegmentId, GFA},
-    optfields::{OptFields, OptionalFields},
-    parser::GFAParser,
-    writer::{gfa_string, write_gfa},
-};
-
-use handlegraph::hashgraph::HashGraph;
+use gfa::{gfa::GFA, optfields::OptionalFields, writer::gfa_string};
 
 use crate::subgraph;
 
-use super::{byte_lines_iter, Result};
+use super::{byte_lines_iter, load_gfa, Result};
 
+#[allow(unused_imports)]
 use log::{debug, info, warn};
 
 arg_enum! {
@@ -54,10 +44,9 @@ pub struct SubgraphArgs {
     list: Option<Vec<String>>,
 }
 
-pub fn subgraph(
-    gfa: &GFA<BString, OptionalFields>,
-    args: &SubgraphArgs,
-) -> Result<()> {
+pub fn subgraph(gfa_path: &PathBuf, args: &SubgraphArgs) -> Result<()> {
+    let gfa: GFA<BString, OptionalFields> = load_gfa(gfa_path)?;
+
     let names: Vec<Vec<u8>> = if let Some(list) = &args.list {
         list.into_iter().map(|s| s.bytes().collect()).collect()
     } else {

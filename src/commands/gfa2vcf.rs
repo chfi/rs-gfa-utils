@@ -1,13 +1,15 @@
 use fnv::{FnvHashMap, FnvHashSet};
-use log::{debug, info, warn};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
 use gfa::gfa::GFA;
 
+#[allow(unused_imports)]
+use log::{debug, info, warn};
+
 use crate::variants;
 
-use super::Result;
+use super::{load_gfa, Result};
 
 /// Output a VCF for the given GFA, using the graph's ultrabubbles to
 /// identify areas of variation. (experimental!)
@@ -26,11 +28,9 @@ pub struct GFA2VCFArgs {
     ignore_inverted_paths: bool,
 }
 
-pub fn gfa2vcf<P: AsRef<std::path::Path>>(
-    gfa_path: P,
-    gfa: &GFA<usize, ()>,
-    args: &GFA2VCFArgs,
-) -> Result<()> {
+pub fn gfa2vcf(gfa_path: &PathBuf, args: &GFA2VCFArgs) -> Result<()> {
+    let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
+
     let segment_map: FnvHashMap<usize, &[u8]> = gfa
         .segments
         .iter()

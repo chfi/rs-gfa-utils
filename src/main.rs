@@ -1,32 +1,14 @@
-use clap::arg_enum;
-use structopt::{clap::ArgGroup, StructOpt};
+use structopt::StructOpt;
 
-use bstr::{io::*, BString, ByteSlice, ByteVec};
-use std::{
-    fs::File,
-    io::{BufReader, Read, Write},
-    path::PathBuf,
+use std::path::PathBuf;
+
+use gfautil::{
+    commands,
+    commands::{
+        convert_names::GfaIdConvertOptions, gaf2paf::GAF2PAFArgs,
+        gfa2vcf::GFA2VCFArgs, subgraph::SubgraphArgs, Result,
+    },
 };
-
-use gfa::{
-    gfa::{name_conversion::NameMap, SegmentId, GFA},
-    optfields::{OptFields, OptionalFields},
-    parser::GFAParser,
-    writer::{gfa_string, write_gfa},
-};
-
-use handlegraph::hashgraph::HashGraph;
-
-use gfautil::{edges, subgraph};
-
-use gfautil::commands;
-use gfautil::commands::*;
-use gfautil::commands::{
-    convert_names::GfaIdConvertOptions, gaf2paf::GAF2PAFArgs,
-    gfa2vcf::GFA2VCFArgs, subgraph::SubgraphArgs,
-};
-
-use log::{debug, info, warn};
 
 #[derive(StructOpt, Debug)]
 enum Command {
@@ -90,32 +72,20 @@ fn main() -> Result<()> {
 
     match opt.command {
         Command::Gfa2Vcf(args) => {
-            let gfa: GFA<usize, ()> = commands::load_gfa(&opt.in_gfa)?;
-            gfa2vcf::gfa2vcf(&opt.in_gfa, &gfa, &args)?;
+            commands::gfa2vcf::gfa2vcf(&opt.in_gfa, &args)?;
         }
 
         Command::Subgraph(args) => {
-            let gfa: GFA<BString, OptionalFields> =
-                commands::load_gfa(&opt.in_gfa)?;
-            commands::subgraph::subgraph(&gfa, &args)?;
+            commands::subgraph::subgraph(&opt.in_gfa, &args)?;
         }
         Command::Gaf2Paf(args) => {
-            let gfa: GFA<BString, OptionalFields> =
-                commands::load_gfa(&opt.in_gfa)?;
-            commands::gaf2paf::gaf2paf(gfa, &args)?;
+            commands::gaf2paf::gaf2paf(&opt.in_gfa, &args)?;
         }
         Command::EdgeCount => {
-            let gfa: GFA<usize, ()> = commands::load_gfa(&opt.in_gfa)?;
-
-            let hashgraph = HashGraph::from_gfa(&gfa);
-            let edge_counts = edges::graph_edge_count(&hashgraph);
-            println!("nodeid,inbound,outbound,total");
-            edge_counts
-                .iter()
-                .for_each(|(id, i, o, t)| println!("{},{},{},{}", id, i, o, t));
+            commands::stats::edge_count(&opt.in_gfa)?;
         }
         Command::GfaSegmentIdConversion(args) => {
-            commands::convert_names::convert_segment_ids(opt.in_gfa, &args)?;
+            commands::convert_names::convert_segment_ids(&opt.in_gfa, &args)?;
         }
     }
     Ok(())

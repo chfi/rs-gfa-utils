@@ -1,21 +1,19 @@
 pub mod convert_names;
 pub mod gaf2paf;
 pub mod gfa2vcf;
+pub mod stats;
 pub mod subgraph;
 
-use std::{
-    fs::File,
-    io::{BufReader, Read, Write},
-    path::PathBuf,
-};
+use std::io::{BufReader, Read};
 
-use bstr::{io::*, BString, ByteSlice, ByteVec};
+use bstr::io::*;
 use gfa::{
     gfa::{SegmentId, GFA},
     optfields::OptFields,
     parser::GFAParser,
 };
 
+#[allow(unused_imports)]
 use log::{debug, info, warn};
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;

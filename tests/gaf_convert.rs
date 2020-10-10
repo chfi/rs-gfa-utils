@@ -11,7 +11,6 @@ use gfa::{
 
 use gfautil::gaf_convert::gaf_to_paf;
 
-type GAF = gfa::gafpaf::GAF<OptionalFields>;
 type PAF = gfa::gafpaf::PAF<OptionalFields>;
 
 fn load_pafs(gfa_path: &str, gaf_path: &str) -> Vec<PAF> {

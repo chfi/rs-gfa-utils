@@ -1,18 +1,12 @@
-use clap::arg_enum;
-use structopt::{clap::ArgGroup, StructOpt};
+use structopt::StructOpt;
 
-use bstr::{io::*, BString, ByteSlice, ByteVec};
-use std::{
-    fs::File,
-    io::{BufReader, Read, Write},
-    path::PathBuf,
-};
+use bstr::BString;
+use std::{fs::File, io::Write, path::PathBuf};
 
 use gfa::{
-    gfa::{name_conversion::NameMap, SegmentId, GFA},
-    optfields::{OptFields, OptionalFields},
-    parser::GFAParser,
-    writer::{gfa_string, write_gfa},
+    gfa::{name_conversion::NameMap, GFA},
+    optfields::OptionalFields,
+    writer::write_gfa,
 };
 
 use super::{load_gfa, Result};
@@ -111,7 +105,7 @@ fn segment_id_to_bstring(
         .gfa_usize_to_bstring(&gfa)
         .expect("Error during conversion -- is it the right name map?");
 
-    let new_gfa_path = restored_gfa_path(&gfa_path);
+    let new_gfa_path = restored_gfa_path(gfa_path);
     let mut new_gfa_file = File::create(new_gfa_path.clone())?;
     let mut gfa_str = String::new();
     write_gfa(&new_gfa, &mut gfa_str);
@@ -122,7 +116,7 @@ fn segment_id_to_bstring(
 }
 
 pub fn convert_segment_ids(
-    gfa_path: PathBuf,
+    gfa_path: &PathBuf,
     args: &GfaIdConvertOptions,
 ) -> Result<()> {
     if !args.to_usize && args.name_map_path.is_none() {
