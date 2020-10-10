@@ -31,14 +31,17 @@ pub struct GFA2VCFArgs {
 pub fn gfa2vcf(gfa_path: &PathBuf, args: &GFA2VCFArgs) -> Result<()> {
     let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
 
+    info!("Building map from segment IDs to sequences");
     let segment_map: FnvHashMap<usize, &[u8]> = gfa
         .segments
         .iter()
         .map(|seg| (seg.name, seg.sequence.as_ref()))
         .collect();
 
+    info!("Extracting paths and offsets from GFA");
     let all_paths = variants::gfa_paths_with_offsets(&gfa, &segment_map);
 
+    info!("Finding graph ultrabubbles");
     let ultrabubbles = if let Some(path) = &args.ultrabubbles_file {
         let ub = crate::ultrabubbles::load_ultrabubbles(path)?;
         ub
@@ -54,6 +57,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: &GFA2VCFArgs) -> Result<()> {
         })
         .collect::<FnvHashSet<_>>();
 
+    info!("Finding ultrabubble path indices");
     let path_indices =
         variants::bubble_path_indices(&all_paths, &ultrabubble_nodes);
 
@@ -63,7 +67,13 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: &GFA2VCFArgs) -> Result<()> {
         ignore_inverted_paths: args.ignore_inverted_paths,
     };
 
-    for &(from, to) in ultrabubbles.iter() {
+    info!(
+        "Identifying variants in {} ultrabubbles",
+        ultrabubbles.len()
+    );
+    for (i, &(from, to)) in ultrabubbles.iter().enumerate() {
+        debug!("Ultrabubble {:10} - {:10},{:10}", i, from, to);
+
         let vars = variants::detect_variants_in_sub_paths(
             &var_config,
             &segment_map,

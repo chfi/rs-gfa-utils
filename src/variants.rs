@@ -2,19 +2,18 @@ pub mod vcf;
 
 use vcf::VCFRecord;
 
-use handlegraph::{handle::*, handlegraph::*};
-
-use fnv::{FnvHashMap, FnvHashSet};
-
-use bstr::{BStr, BString, ByteSlice};
-
 use bio::alphabets::dna;
-
+use bstr::{BStr, BString, ByteSlice};
+use fnv::{FnvHashMap, FnvHashSet};
 use gfa::{
     cigar::CIGAR,
     gfa::{Orientation, Path, GFA},
     optfields::OptFields,
 };
+use handlegraph::{handle::*, handlegraph::*};
+
+#[allow(unused_imports)]
+use log::{debug, info, warn};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct SubPath<'a> {
@@ -263,6 +262,7 @@ pub fn detect_variants_against_ref(
         } else {
             if ref_ix + 1 >= ref_path.len() || query_ix + 1 >= query_path.len()
             {
+                debug!("At end of ref or query");
                 break;
             }
             let (next_ref_node, _next_ref_offset, _) = ref_path[ref_ix + 1];
@@ -270,6 +270,7 @@ pub fn detect_variants_against_ref(
                 query_path[query_ix + 1];
 
             if next_ref_node == query_node {
+                debug!("Deletion at ref {}\t query {}", ref_ix, query_ix);
                 // Deletion
                 let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
                     ref_path[ref_ix]
@@ -299,6 +300,7 @@ pub fn detect_variants_against_ref(
 
                 ref_ix += 1;
             } else if next_query_node == ref_node {
+                debug!("Insertion at ref {}\t query {}", ref_ix, query_ix);
                 // Insertion
 
                 let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
@@ -338,9 +340,11 @@ pub fn detect_variants_against_ref(
                     };
 
                     let variant = if ref_seq.len() == 1 {
+                        debug!("SNV at ref {}\t query {}", ref_ix, query_ix);
                         let last_query_seq: u8 = *query_seq.last().unwrap();
                         Variant::Snv(last_query_seq)
                     } else {
+                        debug!("MNP at ref {}\t query {}", ref_ix, query_ix);
                         Variant::Mnp(query_seq.as_bstr().to_owned())
                     };
 
@@ -377,8 +381,9 @@ impl VariantConfig {
         ref_orient: (Orientation, Orientation),
         query_orient: (Orientation, Orientation),
     ) -> bool {
-        if self.ignore_inverted_paths {
-            ref_orient != query_orient
+        if self.ignore_inverted_paths && ref_orient != query_orient {
+            debug!("Ignoring inverted path");
+            true
         } else {
             false
         }
@@ -407,6 +412,7 @@ pub fn detect_variants_in_sub_paths(
     let from_indices = path_indices.get(&from).unwrap();
     let to_indices = path_indices.get(&to).unwrap();
 
+    debug!("Constructing sub paths");
     let sub_paths: FnvHashMap<&BStr, &[(usize, usize, Orientation)]> = paths
         .iter()
         .filter_map(|(path_name, path)| {
@@ -420,8 +426,10 @@ pub fn detect_variants_in_sub_paths(
         .collect();
 
     for (ref_name, ref_path) in sub_paths.iter() {
+        debug!("Reference path {}", ref_name);
         let ref_orient = sub_path_edge_orient(ref_path);
         for (query_name, query_path) in sub_paths.iter() {
+            debug!("\tQuery path {}", query_name);
             let query_orient = sub_path_edge_orient(query_path);
 
             if ref_name != query_name
