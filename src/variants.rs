@@ -11,6 +11,7 @@ use gfa::{
     optfields::OptFields,
 };
 use handlegraph::{handle::*, handlegraph::*};
+use rayon::prelude::*;
 
 #[allow(unused_imports)]
 use log::{debug, info, warn};

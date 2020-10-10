@@ -47,6 +47,11 @@ struct Opt {
     command: Command,
     #[structopt(flatten)]
     log_opts: LogOpt,
+    /// The number of threads to use when applicable. If omitted,
+    /// Rayon's default will be used, based on the RAYON_NUM_THREADS
+    /// environment variable, or the number of logical CPUs.
+    #[structopt(short, long)]
+    threads: Option<usize>,
 }
 
 fn init_logger(opt: &LogOpt) {
@@ -69,6 +74,13 @@ fn main() -> Result<()> {
     let opt = Opt::from_args();
 
     init_logger(&opt.log_opts);
+
+    if let Some(threads) = &opt.threads {
+        log::info!("Initializing threadpool to use {} threads", threads);
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(*threads)
+            .build_global()?;
+    }
 
     match opt.command {
         Command::Gfa2Vcf(args) => {
