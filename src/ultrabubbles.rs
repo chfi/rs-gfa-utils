@@ -16,7 +16,15 @@ use log::{debug, info, warn};
 pub fn gfa_ultrabubbles(gfa: &GFA<usize, ()>) -> FnvHashSet<(u64, u64)> {
     info!("Computing ultrabubbles");
     debug!("Building biedged graph");
-    let be_graph = BiedgedGraph::from_gfa(gfa);
+
+    let pathless_gfa = GFA {
+        header: gfa.header.clone(),
+        segments: gfa.segments.clone(),
+        links: gfa.links.clone(),
+        ..Default::default()
+    };
+
+    let be_graph = BiedgedGraph::from_gfa(&pathless_gfa);
     let orig_graph = be_graph.clone();
 
     debug!("Building cactus graph");

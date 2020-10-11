@@ -84,7 +84,7 @@ fn main() -> Result<()> {
 
     match opt.command {
         Command::Gfa2Vcf(args) => {
-            commands::gfa2vcf::gfa2vcf(&opt.in_gfa, &args)?;
+            commands::gfa2vcf::gfa2vcf(&opt.in_gfa, args)?;
         }
 
         Command::Subgraph(args) => {

@@ -1,5 +1,8 @@
+use bstr::io::*;
+use bstr::BString;
 use fnv::{FnvHashMap, FnvHashSet};
-use std::path::PathBuf;
+use std::io::{BufReader, Read};
+use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
 use gfa::gfa::GFA;
@@ -26,9 +29,48 @@ pub struct GFA2VCFArgs {
     /// don't match each other
     #[structopt(name = "ignore inverted paths", long = "no-inv")]
     ignore_inverted_paths: bool,
+    #[structopt(
+        name = "file containing paths to include",
+        long = "paths-file"
+    )]
+    included_paths_file: Option<PathBuf>,
+    #[structopt(name = "list of paths to include", long = "paths")]
+    included_paths_vec: Option<Vec<String>>,
 }
 
-pub fn gfa2vcf(gfa_path: &PathBuf, args: &GFA2VCFArgs) -> Result<()> {
+fn load_paths_file(file_path: PathBuf) -> Result<Vec<BString>> {
+    let file = File::open(file_path)?;
+    let reader = BufReader::new(file);
+    let lines = reader.byte_lines();
+
+    let mut paths = Vec::new();
+    for line in lines {
+        let line = line?;
+        paths.push(line.into());
+    }
+
+    Ok(paths)
+}
+
+fn paths_list(paths: Vec<String>) -> Vec<BString> {
+    paths.into_iter().map(BString::from).collect()
+}
+
+pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
+    let included_paths_list =
+        args.included_paths_vec.map(paths_list).unwrap_or_default();
+
+    let included_paths_file = args
+        .included_paths_file
+        .map(load_paths_file)
+        .transpose()?
+        .unwrap_or_default();
+
+    let included_paths: FnvHashSet<BString> = included_paths_list
+        .into_iter()
+        .chain(included_paths_file.into_iter())
+        .collect();
+
     let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
 
     if gfa.paths.len() < 2 {
