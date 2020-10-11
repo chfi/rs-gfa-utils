@@ -95,6 +95,8 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         crate::ultrabubbles::gfa_ultrabubbles(&gfa)
     };
 
+    info!("Using {} ultrabubbles", ultrabubbles.len());
+
     let ultrabubble_nodes = ultrabubbles
         .iter()
         .flat_map(|&(a, b)| {

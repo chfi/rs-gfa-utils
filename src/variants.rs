@@ -47,6 +47,43 @@ pub fn bubble_path_indices(
     let mut path_map: FnvHashMap<u64, FnvHashMap<BString, usize>> =
         FnvHashMap::default();
 
+    let mut transposed: FnvHashMap<BString, FnvHashMap<u64, usize>> =
+        FnvHashMap::default();
+
+    for (path_name, path) in paths.iter() {
+        let mut node_indices: FnvHashMap<u64, usize> = FnvHashMap::default();
+        for (ix, &(step, _, _)) in path.iter().enumerate() {
+            let step = step as u64;
+            if vertices.contains(&step) {
+                node_indices.insert(step, ix);
+            }
+        }
+
+        let path_name = path_name.clone().to_owned();
+        transposed.insert(path_name, node_indices);
+    }
+
+    for &node in vertices {
+        for (path_name, step_map) in transposed.iter() {
+            if let Some(ix) = step_map.get(&node) {
+                let path_name = path_name.clone().to_owned();
+                let entry = path_map.entry(node).or_default();
+                entry.insert(path_name, *ix);
+            }
+        }
+    }
+
+    /*
+    for (path_name, step_map) in transposed.into_iter() {
+        for (node, ix) in step_map.into_iter() {
+            let path_name = path_name.clone();
+            let entry = path_map.entry(node).or_default();
+            entry.insert(path_name, ix);
+        }
+    }
+    */
+
+    /*
     for &node in vertices.iter() {
         for (path_name, path) in paths.iter() {
             let node_ix = path.iter().position(|&(x, _, _)| x == node as usize);
@@ -57,6 +94,7 @@ pub fn bubble_path_indices(
             }
         }
     }
+    */
 
     path_map
 }
