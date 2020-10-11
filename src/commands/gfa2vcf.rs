@@ -31,6 +31,10 @@ pub struct GFA2VCFArgs {
 pub fn gfa2vcf(gfa_path: &PathBuf, args: &GFA2VCFArgs) -> Result<()> {
     let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
 
+    if gfa.paths.len() < 2 {
+        panic!("GFA must contain at least two paths");
+    }
+
     info!("Building map from segment IDs to sequences");
     let segment_map: FnvHashMap<usize, &[u8]> = gfa
         .segments
