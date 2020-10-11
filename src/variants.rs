@@ -51,13 +51,18 @@ pub fn bubble_path_indices(
         FnvHashMap::default();
 
     for (path_name, path) in paths.iter() {
-        let mut node_indices: FnvHashMap<u64, usize> = FnvHashMap::default();
-        for (ix, &(step, _, _)) in path.iter().enumerate() {
-            let step = step as u64;
-            if vertices.contains(&step) {
-                node_indices.insert(step, ix);
-            }
-        }
+        let node_indices: FnvHashMap<u64, usize> = path
+            .iter()
+            .enumerate()
+            .filter_map(|(ix, &(step, _, _))| {
+                let step = step as u64;
+                if vertices.contains(&step) {
+                    Some((step, ix))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         let path_name = path_name.clone().to_owned();
         transposed.insert(path_name, node_indices);
