@@ -77,6 +77,8 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         panic!("GFA must contain at least two paths");
     }
 
+    info!("GFA has {} paths", gfa.paths.len());
+
     info!("Building map from segment IDs to sequences");
     let segment_map: FnvHashMap<usize, &[u8]> = gfa
         .segments
@@ -131,8 +133,10 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
             to,
         );
 
-        let vcf_records = variants::variant_vcf_record(&vars);
-        all_vcf_records.extend(vcf_records);
+        if let Some(vars) = vars {
+            let vcf_records = variants::variant_vcf_record(&vars);
+            all_vcf_records.extend(vcf_records);
+        }
 
         /*
         let from_indices = path_indices.get(&from).unwrap();

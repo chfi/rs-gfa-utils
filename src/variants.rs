@@ -50,7 +50,11 @@ pub fn bubble_path_indices(
     let mut transposed: FnvHashMap<BString, FnvHashMap<u64, usize>> =
         FnvHashMap::default();
 
-    for (path_name, path) in paths.iter() {
+    debug!("Finding ultrabubble node indices for {} paths", paths.len());
+    for (ix, (path_name, path)) in paths.iter().enumerate() {
+        if ix % 100 == 0 {
+            debug!("Path {} of {}", ix, paths.len());
+        }
         let node_indices: FnvHashMap<u64, usize> = path
             .iter()
             .enumerate()
@@ -68,7 +72,11 @@ pub fn bubble_path_indices(
         transposed.insert(path_name, node_indices);
     }
 
-    for &node in vertices {
+    debug!("Transposing path/ultrabubble node index map");
+    for (ix, &node) in vertices.iter().enumerate() {
+        if ix % 1000 == 0 {
+            debug!("Node index {} of {}", ix, vertices.len());
+        }
         for (path_name, step_map) in transposed.iter() {
             if let Some(ix) = step_map.get(&node) {
                 let path_name = path_name.clone().to_owned();
@@ -449,14 +457,13 @@ pub fn detect_variants_in_sub_paths(
     path_indices: &FnvHashMap<u64, FnvHashMap<BString, usize>>,
     from: u64,
     to: u64,
-) -> FnvHashMap<BString, FnvHashMap<VariantKey, FnvHashSet<Variant>>> {
+) -> Option<FnvHashMap<BString, FnvHashMap<VariantKey, FnvHashSet<Variant>>>> {
+    let from_indices = path_indices.get(&from)?;
+    let to_indices = path_indices.get(&to)?;
+
     let mut variants: FnvHashMap<BString, FnvHashMap<_, FnvHashSet<_>>> =
         FnvHashMap::default();
 
-    let from_indices = path_indices.get(&from).unwrap();
-    let to_indices = path_indices.get(&to).unwrap();
-
-    debug!("Constructing sub paths");
     let sub_paths: FnvHashMap<&BStr, &[(usize, usize, Orientation)]> = paths
         .iter()
         .filter_map(|(path_name, path)| {
@@ -470,7 +477,6 @@ pub fn detect_variants_in_sub_paths(
         .collect();
 
     for (ref_name, ref_path) in sub_paths.iter() {
-        debug!("Reference path {}", ref_name);
         let ref_orient = sub_path_edge_orient(ref_path);
 
         let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
@@ -480,7 +486,6 @@ pub fn detect_variants_in_sub_paths(
             sub_paths
                 .par_iter()
                 .filter_map(|(query_name, query_path)| {
-                    debug!("\tQuery path {}", query_name);
                     let query_orient = sub_path_edge_orient(query_path);
 
                     if ref_name != query_name
@@ -505,7 +510,7 @@ pub fn detect_variants_in_sub_paths(
         variants.insert(ref_name, ref_map);
     }
 
-    variants
+    Some(variants)
 }
 
 pub fn variant_vcf_record(
