@@ -5,6 +5,9 @@ use std::io::{BufReader, Read};
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use rayon::prelude::*;
+
 use gfa::gfa::GFA;
 
 #[allow(unused_imports)]
@@ -121,43 +124,33 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         "Identifying variants in {} ultrabubbles",
         ultrabubbles.len()
     );
-    for (i, &(from, to)) in ultrabubbles.iter().enumerate() {
-        debug!("Ultrabubble {:10} - {:10},{:10}", i, from, to);
 
-        let vars = variants::detect_variants_in_sub_paths(
-            &var_config,
-            &segment_map,
-            &all_paths,
-            &path_indices,
-            from,
-            to,
-        );
+    let p_bar = ProgressBar::new(ultrabubbles.len() as u64);
+    p_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
+            .progress_chars("##-"),
+    );
 
-        if let Some(vars) = vars {
-            let vcf_records = variants::variant_vcf_record(&vars);
-            all_vcf_records.extend(vcf_records);
-        }
+    all_vcf_records.par_extend(
+        ultrabubbles
+            .par_iter()
+            .progress_with(p_bar)
+            .filter_map(|&(from, to)| {
+                let vars = variants::detect_variants_in_sub_paths(
+                    &var_config,
+                    &segment_map,
+                    &all_paths,
+                    &path_indices,
+                    from,
+                    to,
+                )?;
 
-        /*
-        let from_indices = path_indices.get(&from).unwrap();
-        let to_indices = path_indices.get(&to).unwrap();
-
-        let sub_paths: FnvHashMap<
-            &BStr,
-            &[(usize, usize, Orientation)],
-        > = all_paths
-            .iter()
-            .filter_map(|(path_name, path)| {
-                let from_ix = *from_indices.get(path_name)?;
-                let to_ix = *to_indices.get(path_name)?;
-                let from = from_ix.min(to_ix);
-                let to = from_ix.max(to_ix);
-                let sub_path = &path[from..=to];
-                Some((path_name.as_bstr(), sub_path))
+                let vcf_records = variants::variant_vcf_record(&vars);
+                Some(vcf_records)
             })
-            .collect();
-        */
-    }
+            .flatten(),
+    );
 
     all_vcf_records.sort_by(|v0, v1| v0.vcf_cmp(v1));
 

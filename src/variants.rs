@@ -14,7 +14,7 @@ use handlegraph::{handle::*, handlegraph::*};
 use rayon::prelude::*;
 
 #[allow(unused_imports)]
-use log::{debug, info, warn};
+use log::{debug, info, trace, warn};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct SubPath<'a> {
@@ -51,8 +51,9 @@ pub fn bubble_path_indices(
         FnvHashMap::default();
 
     debug!("Finding ultrabubble node indices for {} paths", paths.len());
+    let step = paths.len() / 25;
     for (ix, (path_name, path)) in paths.iter().enumerate() {
-        if ix % 100 == 0 {
+        if ix % step == 0 {
             debug!("Path {} of {}", ix, paths.len());
         }
         let node_indices: FnvHashMap<u64, usize> = path
@@ -72,9 +73,10 @@ pub fn bubble_path_indices(
         transposed.insert(path_name, node_indices);
     }
 
+    let step = vertices.len() / 50;
     debug!("Transposing path/ultrabubble node index map");
     for (ix, &node) in vertices.iter().enumerate() {
-        if ix % 1000 == 0 {
+        if ix % step == 0 {
             debug!("Node index {} of {}", ix, vertices.len());
         }
         for (path_name, step_map) in transposed.iter() {
@@ -314,7 +316,7 @@ pub fn detect_variants_against_ref(
         } else {
             if ref_ix + 1 >= ref_path.len() || query_ix + 1 >= query_path.len()
             {
-                debug!("At end of ref or query");
+                trace!("At end of ref or query");
                 break;
             }
             let (next_ref_node, _next_ref_offset, _) = ref_path[ref_ix + 1];
@@ -322,7 +324,7 @@ pub fn detect_variants_against_ref(
                 query_path[query_ix + 1];
 
             if next_ref_node == query_node {
-                debug!("Deletion at ref {}\t query {}", ref_ix, query_ix);
+                trace!("Deletion at ref {}\t query {}", ref_ix, query_ix);
                 // Deletion
                 let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
                     ref_path[ref_ix]
@@ -352,7 +354,7 @@ pub fn detect_variants_against_ref(
 
                 ref_ix += 1;
             } else if next_query_node == ref_node {
-                debug!("Insertion at ref {}\t query {}", ref_ix, query_ix);
+                trace!("Insertion at ref {}\t query {}", ref_ix, query_ix);
                 // Insertion
 
                 let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
@@ -392,11 +394,11 @@ pub fn detect_variants_against_ref(
                     };
 
                     let variant = if ref_seq.len() == 1 {
-                        debug!("SNV at ref {}\t query {}", ref_ix, query_ix);
+                        trace!("SNV at ref {}\t query {}", ref_ix, query_ix);
                         let last_query_seq: u8 = *query_seq.last().unwrap();
                         Variant::Snv(last_query_seq)
                     } else {
-                        debug!("MNP at ref {}\t query {}", ref_ix, query_ix);
+                        trace!("MNP at ref {}\t query {}", ref_ix, query_ix);
                         Variant::Mnp(query_seq.as_bstr().to_owned())
                     };
 
@@ -434,7 +436,7 @@ impl VariantConfig {
         query_orient: (Orientation, Orientation),
     ) -> bool {
         if self.ignore_inverted_paths && ref_orient != query_orient {
-            debug!("Ignoring inverted path");
+            trace!("Ignoring inverted path");
             true
         } else {
             false
@@ -476,7 +478,7 @@ pub fn detect_variants_in_sub_paths(
         })
         .collect();
 
-    variants.par_extend(sub_paths.par_iter().map(|(ref_name, ref_path)| {
+    variants.extend(sub_paths.iter().map(|(ref_name, ref_path)| {
         let ref_orient = sub_path_edge_orient(ref_path);
 
         let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
@@ -502,42 +504,6 @@ pub fn detect_variants_in_sub_paths(
         let ref_name: BString = ref_name.clone().to_owned();
         (ref_name, ref_map)
     }));
-
-    /*
-    for (ref_name, ref_path) in sub_paths.iter() {
-        let ref_orient = sub_path_edge_orient(ref_path);
-
-        let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
-            FnvHashMap::default();
-
-        ref_map.par_extend(
-            sub_paths
-                .par_iter()
-                .filter_map(|(query_name, query_path)| {
-                    let query_orient = sub_path_edge_orient(query_path);
-
-                    if ref_name != query_name
-                        && !variant_config.ignore_path(ref_orient, query_orient)
-                    {
-                        let vars = detect_variants_against_ref(
-                            segment_sequences,
-                            ref_name,
-                            ref_path,
-                            query_path,
-                        );
-
-                        Some(vars)
-                    } else {
-                        None
-                    }
-                })
-                .flatten(),
-        );
-
-        let ref_name: BString = ref_name.clone().to_owned();
-        variants.insert(ref_name, ref_map);
-    }
-    */
 
     Some(variants)
 }
