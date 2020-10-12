@@ -51,7 +51,7 @@ pub fn bubble_path_indices(
         FnvHashMap::default();
 
     debug!("Finding ultrabubble node indices for {} paths", paths.len());
-    let step = paths.len() / 25;
+    let step = 1.max(paths.len() / 25);
     for (ix, (path_name, path)) in paths.iter().enumerate() {
         if ix % step == 0 {
             debug!("Path {} of {}", ix, paths.len());
@@ -73,7 +73,7 @@ pub fn bubble_path_indices(
         transposed.insert(path_name, node_indices);
     }
 
-    let step = vertices.len() / 50;
+    let step = 1.max(vertices.len() / 50);
     debug!("Transposing path/ultrabubble node index map");
     for (ix, &node) in vertices.iter().enumerate() {
         if ix % step == 0 {
@@ -455,6 +455,7 @@ impl Default for VariantConfig {
 pub fn detect_variants_in_sub_paths(
     variant_config: &VariantConfig,
     segment_sequences: &FnvHashMap<usize, &[u8]>,
+    ref_path_names: Option<&FnvHashSet<BString>>,
     paths: &FnvHashMap<BString, Vec<(usize, usize, Orientation)>>,
     path_indices: &FnvHashMap<u64, FnvHashMap<BString, usize>>,
     from: u64,
@@ -478,7 +479,18 @@ pub fn detect_variants_in_sub_paths(
         })
         .collect();
 
-    variants.extend(sub_paths.iter().map(|(ref_name, ref_path)| {
+    let is_ref_path = |p: &BStr| {
+        if let Some(ref_path_names) = ref_path_names {
+            ref_path_names.contains(p)
+        } else {
+            true
+        }
+    };
+
+    variants.extend(sub_paths.iter().filter_map(|(ref_name, ref_path)| {
+        if !is_ref_path(ref_name) {
+            return None;
+        }
         let ref_orient = sub_path_edge_orient(ref_path);
 
         let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
@@ -502,7 +514,7 @@ pub fn detect_variants_in_sub_paths(
         }
 
         let ref_name: BString = ref_name.clone().to_owned();
-        (ref_name, ref_map)
+        Some((ref_name, ref_map))
     }));
 
     Some(variants)

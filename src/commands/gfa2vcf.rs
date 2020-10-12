@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use gfa::gfa::GFA;
 
 #[allow(unused_imports)]
-use log::{debug, info, warn};
+use log::{debug, info, log_enabled, warn};
 
 use crate::variants;
 
@@ -33,12 +33,12 @@ pub struct GFA2VCFArgs {
     #[structopt(name = "ignore inverted paths", long = "no-inv")]
     ignore_inverted_paths: bool,
     #[structopt(
-        name = "file containing paths to include",
+        name = "file containing paths to use as references",
         long = "paths-file"
     )]
-    included_paths_file: Option<PathBuf>,
-    #[structopt(name = "list of paths to include", long = "paths")]
-    included_paths_vec: Option<Vec<String>>,
+    ref_paths_file: Option<PathBuf>,
+    #[structopt(name = "list of paths to use as references", long = "refs")]
+    ref_paths_vec: Option<Vec<String>>,
 }
 
 fn load_paths_file(file_path: PathBuf) -> Result<Vec<BString>> {
@@ -60,19 +60,31 @@ fn paths_list(paths: Vec<String>) -> Vec<BString> {
 }
 
 pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
-    let included_paths_list =
-        args.included_paths_vec.map(paths_list).unwrap_or_default();
+    let ref_paths_list = args.ref_paths_vec.map(paths_list).unwrap_or_default();
 
-    let included_paths_file = args
-        .included_paths_file
+    let ref_paths_file = args
+        .ref_paths_file
         .map(load_paths_file)
         .transpose()?
         .unwrap_or_default();
 
-    let included_paths: FnvHashSet<BString> = included_paths_list
-        .into_iter()
-        .chain(included_paths_file.into_iter())
-        .collect();
+    let ref_path_names: Option<FnvHashSet<BString>> = {
+        let ref_paths: FnvHashSet<BString> = ref_paths_list
+            .into_iter()
+            .chain(ref_paths_file.into_iter())
+            .collect();
+        if ref_paths.is_empty() {
+            None
+        } else {
+            if log_enabled!(log::Level::Debug) {
+                debug!("Using reference paths:");
+                for p in ref_paths.iter() {
+                    debug!("\t{}", p);
+                }
+            }
+            Some(ref_paths)
+        }
+    };
 
     let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
 
@@ -131,6 +143,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
             .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
             .progress_chars("##-"),
     );
+    p_bar.enable_steady_tick(1000);
 
     all_vcf_records.par_extend(
         ultrabubbles
@@ -140,6 +153,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
                 let vars = variants::detect_variants_in_sub_paths(
                     &var_config,
                     &segment_map,
+                    ref_path_names.as_ref(),
                     &all_paths,
                     &path_indices,
                     from,
