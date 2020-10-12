@@ -476,6 +476,34 @@ pub fn detect_variants_in_sub_paths(
         })
         .collect();
 
+    variants.par_extend(sub_paths.par_iter().map(|(ref_name, ref_path)| {
+        let ref_orient = sub_path_edge_orient(ref_path);
+
+        let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
+            FnvHashMap::default();
+
+        for (query_name, query_path) in sub_paths.iter() {
+            let query_orient = sub_path_edge_orient(query_path);
+
+            if ref_name != query_name
+                && !variant_config.ignore_path(ref_orient, query_orient)
+            {
+                let vars = detect_variants_against_ref(
+                    segment_sequences,
+                    ref_name,
+                    ref_path,
+                    query_path,
+                );
+
+                ref_map.extend(vars)
+            }
+        }
+
+        let ref_name: BString = ref_name.clone().to_owned();
+        (ref_name, ref_map)
+    }));
+
+    /*
     for (ref_name, ref_path) in sub_paths.iter() {
         let ref_orient = sub_path_edge_orient(ref_path);
 
@@ -509,6 +537,7 @@ pub fn detect_variants_in_sub_paths(
         let ref_name: BString = ref_name.clone().to_owned();
         variants.insert(ref_name, ref_map);
     }
+    */
 
     Some(variants)
 }
