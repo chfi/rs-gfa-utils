@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use gfautil::{
     commands,
     commands::{
-        convert_names::GfaIdConvertOptions, gaf2paf::GAF2PAFArgs,
+        convert_names::GfaIdConvertArgs, gaf2paf::GAF2PAFArgs,
         gfa2vcf::GFA2VCFArgs, subgraph::SubgraphArgs, Result,
     },
 };
@@ -16,9 +16,12 @@ enum Command {
     EdgeCount,
     #[structopt(name = "gaf2paf")]
     Gaf2Paf(GAF2PAFArgs),
-    GfaSegmentIdConversion(GfaIdConvertOptions),
+    #[structopt(name = "id-convert")]
+    GfaSegmentIdConversion(GfaIdConvertArgs),
     #[structopt(name = "gfa2vcf")]
     Gfa2Vcf(GFA2VCFArgs),
+    #[structopt(name = "ultrabubbles")]
+    Saboten,
 }
 
 #[derive(StructOpt, Debug)]
@@ -36,14 +39,10 @@ struct LogOpt {
 
 #[derive(StructOpt, Debug)]
 struct Opt {
-    #[structopt(
-        name = "input GFA file",
-        short,
-        long = "gfa",
-        parse(from_os_str)
-    )]
+    #[structopt(name = "input GFA file", short, parse(from_os_str))]
     in_gfa: PathBuf,
-    #[structopt(subcommand)]
+    // #[structopt(subcommand)]
+    #[structopt(flatten)]
     command: Command,
     #[structopt(flatten)]
     log_opts: LogOpt,
@@ -98,6 +97,9 @@ fn main() -> Result<()> {
         }
         Command::GfaSegmentIdConversion(args) => {
             commands::convert_names::convert_segment_ids(&opt.in_gfa, &args)?;
+        }
+        Command::Saboten => {
+            commands::saboten::run_saboten(&opt.in_gfa)?;
         }
     }
     Ok(())

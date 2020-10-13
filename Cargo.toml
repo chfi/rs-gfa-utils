@@ -30,7 +30,8 @@ indicatif = { version = "0.15", features = ["rayon"] }
 bio = "0.32"
 gfa = "0.8"
 handlegraph = "0.5"
-saboten = "0.0.1"
+saboten = { path = "../saboten", features = ["cli_logging"] }
+# saboten = { version = "0.0.1"
 
 
 [[bin]]

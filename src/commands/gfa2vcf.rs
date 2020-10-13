@@ -1,8 +1,11 @@
-use bstr::io::*;
-use bstr::BString;
+use bstr::{io::*, BString};
 use fnv::{FnvHashMap, FnvHashSet};
-use std::io::{BufReader, Read};
-use std::{fs::File, io::Write, path::PathBuf};
+use std::{
+    fs::File,
+    io::Write,
+    io::{BufReader, Read},
+    path::PathBuf,
+};
 use structopt::StructOpt;
 
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
@@ -106,11 +109,10 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
 
     info!("Finding graph ultrabubbles");
     let ultrabubbles = if let Some(path) = &args.ultrabubbles_file {
-        let ub = crate::ultrabubbles::load_ultrabubbles(path)?;
-        ub
+        super::saboten::load_ultrabubbles(path)
     } else {
-        crate::ultrabubbles::gfa_ultrabubbles(&gfa)
-    };
+        super::saboten::find_ultrabubbles(gfa_path)
+    }?;
 
     info!("Using {} ultrabubbles", ultrabubbles.len());
 

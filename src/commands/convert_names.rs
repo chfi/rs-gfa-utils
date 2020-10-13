@@ -14,7 +14,7 @@ use super::{load_gfa, Result};
 #[derive(StructOpt, Debug)]
 /// Convert a GFA with string names to one with integer names, and
 /// back.
-pub struct GfaIdConvertOptions {
+pub struct GfaIdConvertArgs {
     /// Path to a name map that was previously generated for the given GFA.
     /// Required if transforming to the original segment names. If not
     /// provided, a new map is generated and saved to disk.
@@ -60,7 +60,7 @@ fn restored_gfa_path(path: &PathBuf) -> PathBuf {
 fn segment_id_to_usize(
     gfa_path: &PathBuf,
     gfa: &GFA<BString, OptionalFields>,
-    args: &GfaIdConvertOptions,
+    args: &GfaIdConvertArgs,
 ) -> Result<()> {
     let name_map = if let Some(ref path) = &args.name_map_path {
         let map = NameMap::load_json(&path)?;
@@ -93,7 +93,7 @@ fn segment_id_to_usize(
 fn segment_id_to_bstring(
     gfa_path: &PathBuf,
     gfa: &GFA<usize, OptionalFields>,
-    args: &GfaIdConvertOptions,
+    args: &GfaIdConvertArgs,
 ) -> Result<()> {
     let name_map_path = args
         .name_map_path
@@ -117,7 +117,7 @@ fn segment_id_to_bstring(
 
 pub fn convert_segment_ids(
     gfa_path: &PathBuf,
-    args: &GfaIdConvertOptions,
+    args: &GfaIdConvertArgs,
 ) -> Result<()> {
     if !args.to_usize && args.name_map_path.is_none() {
         eprintln!("this shouldn't happen");

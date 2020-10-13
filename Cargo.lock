@@ -903,14 +903,16 @@ checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 
 [[package]]
 name = "saboten"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2910d438f2e91e114c278460950f454d56da744bb8ecb10000d80a43d7658191"
+version = "0.0.2"
 dependencies = [
  "bstr",
+ "env_logger",
  "fnv",
  "gfa",
+ "indicatif",
+ "log",
  "petgraph",
+ "pretty_env_logger",
  "rayon",
  "serde",
  "serde_json",
