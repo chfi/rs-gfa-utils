@@ -25,7 +25,11 @@ use super::{load_gfa, Result};
 #[derive(StructOpt, Debug)]
 pub struct GFA2VCFArgs {
     /// Load ultrabubbles from a file instead of calculating them.
-    #[structopt(name = "ultrabubbles file", long = "ultrabubbles", short = "ub")]
+    #[structopt(
+        name = "ultrabubbles file",
+        long = "ultrabubbles",
+        short = "ub"
+    )]
     ultrabubbles_file: Option<PathBuf>,
     /// Don't compare two paths if their start and end orientations
     /// don't match each other
@@ -116,57 +120,61 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
 
     let mut representative_paths = Vec::new();
 
-    let mut remaining_ultrabubbles = ultrabubbles.clone();
+    let mut remaining_ultrabubbles: FnvHashMap<u64, u64> =
+        ultrabubbles.iter().copied().collect();
+
 
     for (count, (path, steps)) in all_paths.iter().enumerate() {
         if remaining_ultrabubbles.is_empty() {
             break;
         }
 
-        let indices = remaining_ultrabubbles
+        let maybe_contained: FnvHashMap<u64, u64> = steps
             .iter()
-            .enumerate()
-            .filter_map(|(ix, &(x, y))| {
-                let a = x as usize;
-                let b = y as usize;
-                let mut has_a = false;
-                let mut has_b = false;
-                for (u, _, _) in steps.iter() {
-                    if u == &a {
-                        has_a = true;
-                    } else if u == &b {
-                        has_b = true;
-                    }
-                    if has_a && has_b {
-                        break;
-                    }
-                }
-                if has_a && has_b {
-                    Some(ix)
-                } else {
-                    None
-                }
+            .filter_map(|&(step, _, _)| {
+                let x = step as u64;
+                let y = remaining_ultrabubbles.get(&x)?;
+                Some((*y, x))
+            })
+            .collect();
+
+        if maybe_contained.is_empty() {
+            continue;
+        }
+
+        let contained = steps
+            .iter()
+            .filter_map(|&(step, _, _)| {
+                let y = step as u64;
+                let x = maybe_contained.get(&y)?;
+                Some((*x, y))
             })
             .collect::<Vec<_>>();
 
-        let path_name = path.clone().to_owned();
-        let mut bubbles = Vec::new();
-        for (step, ix) in indices.into_iter().enumerate() {
-            let ub = remaining_ultrabubbles.remove(ix - step);
-            bubbles.push(ub);
+
+        for &(x, y) in contained.iter() {
+            remaining_ultrabubbles.remove(&x);
         }
+
+        let path_name = path.clone().to_owned();
+        let bubbles = contained.into_iter().collect::<Vec<_>>();
+
         let path_name_str: String = path_name.to_string();
-        println!(
-            "{:5} {:<40}\t{} bubbles\t{} remaining",
-            count,
-            path_name,
-            bubbles.len(),
-            remaining_ultrabubbles.len()
-        );
-        representative_paths.push((path_name, bubbles));
+
+        if !bubbles.is_empty() {
+            println!(
+                "{:5} {:<40}\t{} bubbles\t{} remaining",
+                count,
+                path_name,
+                bubbles.len(),
+                remaining_ultrabubbles.len()
+            );
+            representative_paths.push((path_name, bubbles));
+        }
     }
 
     println!("{} paths", representative_paths.len());
+    println!("{} bubbles left", remaining_ultrabubbles.len());
 
     /*
 
