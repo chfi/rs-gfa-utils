@@ -11,7 +11,7 @@ use structopt::StructOpt;
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
-use gfa::gfa::GFA;
+use gfa::gfa::{Orientation, GFA};
 
 #[allow(unused_imports)]
 use log::{debug, info, log_enabled, warn};
@@ -118,34 +118,47 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
 
     let mut remaining_ultrabubbles = ultrabubbles.clone();
 
-    for (path, steps) in all_paths.iter() {
-        let indices = remaining_ultrabubbles.iter().position(|&(x, y)| {
-            let a = x as usize;
-            let b = y as usize;
-            let mut has_a = false;
-            let mut has_b = false;
-            for (u, _, _) in steps.iter() {
-                if u == &a {
-                    has_a = true;
-                } else if u == &b {
-                    has_b = true;
+    for (count, (path, steps)) in all_paths.iter().enumerate() {
+        if remaining_ultrabubbles.is_empty() {
+            break;
+        }
+
+        let indices = remaining_ultrabubbles
+            .iter()
+            .enumerate()
+            .filter_map(|(ix, &(x, y))| {
+                let a = x as usize;
+                let b = y as usize;
+                let mut has_a = false;
+                let mut has_b = false;
+                for (u, _, _) in steps.iter() {
+                    if u == &a {
+                        has_a = true;
+                    } else if u == &b {
+                        has_b = true;
+                    }
+                    if has_a && has_b {
+                        break;
+                    }
                 }
                 if has_a && has_b {
-                    break;
+                    Some(ix)
+                } else {
+                    None
                 }
-            }
-            has_a && has_b
-        });
+            })
+            .collect::<Vec<_>>();
 
         let path_name = path.clone().to_owned();
         let mut bubbles = Vec::new();
-        for ix in indices {
-            let ub = remaining_ultrabubbles.remove(ix);
+        for (step, ix) in indices.into_iter().enumerate() {
+            let ub = remaining_ultrabubbles.remove(ix - step);
             bubbles.push(ub);
         }
         let path_name_str: String = path_name.to_string();
         println!(
-            "{:<40}\t{} bubbles\t{} remaining",
+            "{:5} {:<40}\t{} bubbles\t{} remaining",
+            count,
             path_name,
             bubbles.len(),
             remaining_ultrabubbles.len()
