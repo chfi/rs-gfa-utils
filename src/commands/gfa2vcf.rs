@@ -104,13 +104,58 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
     let all_paths = variants::gfa_paths_with_offsets(&gfa, &segment_map);
 
     info!("Finding graph ultrabubbles");
-    let ultrabubbles = if let Some(path) = &args.ultrabubbles_file {
+    let mut ultrabubbles = if let Some(path) = &args.ultrabubbles_file {
         super::saboten::load_ultrabubbles(path)
     } else {
         super::saboten::find_ultrabubbles(gfa_path)
     }?;
 
     info!("Using {} ultrabubbles", ultrabubbles.len());
+
+    ultrabubbles.sort();
+
+    let mut representative_paths = Vec::new();
+
+    let mut remaining_ultrabubbles = ultrabubbles.clone();
+
+    for (path, steps) in all_paths.iter() {
+        let indices = remaining_ultrabubbles.iter().position(|&(x, y)| {
+            let a = x as usize;
+            let b = y as usize;
+            let mut has_a = false;
+            let mut has_b = false;
+            for (u, _, _) in steps.iter() {
+                if u == &a {
+                    has_a = true;
+                } else if u == &b {
+                    has_b = true;
+                }
+                if has_a && has_b {
+                    break;
+                }
+            }
+            has_a && has_b
+        });
+
+        let path_name = path.clone().to_owned();
+        let mut bubbles = Vec::new();
+        for ix in indices {
+            let ub = remaining_ultrabubbles.remove(ix);
+            bubbles.push(ub);
+        }
+        let path_name_str: String = path_name.to_string();
+        println!(
+            "{:<40}\t{} bubbles\t{} remaining",
+            path_name,
+            bubbles.len(),
+            remaining_ultrabubbles.len()
+        );
+        representative_paths.push((path_name, bubbles));
+    }
+
+    println!("{} paths", representative_paths.len());
+
+    /*
 
     let ultrabubble_nodes = ultrabubbles
         .iter()
