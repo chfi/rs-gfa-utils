@@ -11,6 +11,8 @@ use gfa::{
     optfields::OptFields,
 };
 use handlegraph::{handle::*, handlegraph::*};
+
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
 #[allow(unused_imports)]
@@ -88,29 +90,6 @@ pub fn bubble_path_indices(
         }
     }
 
-    /*
-    for (path_name, step_map) in transposed.into_iter() {
-        for (node, ix) in step_map.into_iter() {
-            let path_name = path_name.clone();
-            let entry = path_map.entry(node).or_default();
-            entry.insert(path_name, ix);
-        }
-    }
-    */
-
-    /*
-    for &node in vertices.iter() {
-        for (path_name, path) in paths.iter() {
-            let node_ix = path.iter().position(|&(x, _, _)| x == node as usize);
-            if let Some(ix) = node_ix {
-                let path_name = path_name.clone().to_owned();
-                let entry = path_map.entry(node).or_default();
-                entry.insert(path_name, ix);
-            }
-        }
-    }
-    */
-
     path_map
 }
 
@@ -118,23 +97,31 @@ pub fn gfa_paths_with_offsets(
     gfa: &GFA<usize, ()>,
     seg_seq_map: &FnvHashMap<usize, &[u8]>,
 ) -> FnvHashMap<BString, Vec<(usize, usize, Orientation)>> {
-    gfa.paths
-        .iter()
-        .map(|path| {
-            let name = path.path_name.clone();
-            let steps: Vec<(usize, usize, Orientation)> = path
-                .iter()
-                .scan(1, |offset, (step, orient)| {
-                    let step_offset = *offset;
-                    let step_len = seg_seq_map.get(&step).unwrap().len();
-                    *offset += step_len;
-                    Some((step, step_offset, orient))
-                })
-                .collect();
+    let mut path_map: FnvHashMap<BString, Vec<_>> = FnvHashMap::default();
 
-            (name, steps)
-        })
-        .collect()
+    let p_bar = ProgressBar::new(gfa.paths.len() as u64);
+    p_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
+            .progress_chars("##-"),
+    );
+
+    path_map.par_extend(gfa.paths.par_iter().progress_with(p_bar).map(|path| {
+        let name = path.path_name.clone();
+        let steps: Vec<(usize, usize, Orientation)> = path
+            .iter()
+            .scan(1, |offset, (step, orient)| {
+                let step_offset = *offset;
+                let step_len = seg_seq_map.get(&step).unwrap().len();
+                *offset += step_len;
+                Some((step, step_offset, orient))
+            })
+            .collect();
+
+        (name, steps)
+    }));
+
+    path_map
 }
 
 pub fn gfa_paths<T: OptFields>(
