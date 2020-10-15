@@ -12,8 +12,23 @@ use gfa::{
 };
 use handlegraph::{handle::*, handlegraph::*};
 
-use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use indicatif::{
+    ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle,
+};
 use rayon::prelude::*;
+
+fn progress_bar(len: usize, steady: bool) -> ProgressBar {
+    let p_bar = ProgressBar::new(len as u64);
+    p_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
+            .progress_chars("##-"),
+    );
+    if steady {
+        p_bar.enable_steady_tick(1000);
+    }
+    p_bar
+}
 
 #[allow(unused_imports)]
 use log::{debug, info, trace, warn};
@@ -52,40 +67,40 @@ pub fn bubble_path_indices(
     let mut transposed: FnvHashMap<BString, FnvHashMap<u64, usize>> =
         FnvHashMap::default();
 
-    debug!("Finding ultrabubble node indices for {} paths", paths.len());
-    let step = 1.max(paths.len() / 25);
-    for (ix, (path_name, path)) in paths.iter().enumerate() {
-        if ix % step == 0 {
-            debug!("Path {} of {}", ix, paths.len());
-        }
-        let node_indices: FnvHashMap<u64, usize> = path
-            .iter()
-            .enumerate()
-            .filter_map(|(ix, &(step, _, _))| {
-                let step = step as u64;
-                if vertices.contains(&step) {
-                    Some((step, ix))
-                } else {
-                    None
-                }
-            })
-            .collect();
+    {
+        debug!("Finding ultrabubble node indices for {} paths", paths.len());
+        let p_bar = progress_bar(paths.len(), false);
+        transposed.par_extend(paths.par_iter().progress_with(p_bar).map(
+            |(path_name, path)| {
+                let node_indices: FnvHashMap<u64, usize> = path
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(ix, &(step, _, _))| {
+                        let step = step as u64;
+                        if vertices.contains(&step) {
+                            Some((step, ix))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
 
-        let path_name = path_name.clone().to_owned();
-        transposed.insert(path_name, node_indices);
+                let path_name = path_name.clone().to_owned();
+                (path_name, node_indices)
+            },
+        ));
     }
 
-    let step = 1.max(vertices.len() / 50);
-    debug!("Transposing path/ultrabubble node index map");
-    for (ix, &node) in vertices.iter().enumerate() {
-        if ix % step == 0 {
-            debug!("Node index {} of {}", ix, vertices.len());
-        }
-        for (path_name, step_map) in transposed.iter() {
-            if let Some(ix) = step_map.get(&node) {
-                let path_name = path_name.clone().to_owned();
-                let entry = path_map.entry(node).or_default();
-                entry.insert(path_name, *ix);
+    {
+        debug!("Transposing path/ultrabubble node index map");
+        let p_bar = progress_bar(vertices.len(), true);
+        for (ix, &node) in vertices.iter().enumerate().progress_with(p_bar) {
+            for (path_name, step_map) in transposed.iter() {
+                if let Some(ix) = step_map.get(&node) {
+                    let path_name = path_name.clone().to_owned();
+                    let entry = path_map.entry(node).or_default();
+                    entry.insert(path_name, *ix);
+                }
             }
         }
     }
@@ -99,27 +114,24 @@ pub fn gfa_paths_with_offsets(
 ) -> FnvHashMap<BString, Vec<(usize, usize, Orientation)>> {
     let mut path_map: FnvHashMap<BString, Vec<_>> = FnvHashMap::default();
 
-    let p_bar = ProgressBar::new(gfa.paths.len() as u64);
-    p_bar.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
-            .progress_chars("##-"),
-    );
+    let p_bar = progress_bar(gfa.paths.len(), false);
 
-    path_map.par_extend(gfa.paths.par_iter().progress_with(p_bar).map(|path| {
-        let name = path.path_name.clone();
-        let steps: Vec<(usize, usize, Orientation)> = path
-            .iter()
-            .scan(1, |offset, (step, orient)| {
-                let step_offset = *offset;
-                let step_len = seg_seq_map.get(&step).unwrap().len();
-                *offset += step_len;
-                Some((step, step_offset, orient))
-            })
-            .collect();
+    path_map.par_extend(gfa.paths.par_iter().progress_with(p_bar).map(
+        |path| {
+            let name = path.path_name.clone();
+            let steps: Vec<(usize, usize, Orientation)> = path
+                .iter()
+                .scan(1, |offset, (step, orient)| {
+                    let step_offset = *offset;
+                    let step_len = seg_seq_map.get(&step).unwrap().len();
+                    *offset += step_len;
+                    Some((step, step_offset, orient))
+                })
+                .collect();
 
-        (name, steps)
-    }));
+            (name, steps)
+        },
+    ));
 
     path_map
 }
