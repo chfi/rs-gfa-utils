@@ -128,8 +128,10 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         if remaining_ultrabubbles.is_empty() {
             break;
         }
+        let path_name = path.clone().to_owned();
+        let path_name_str: String = path_name.to_string();
 
-        let maybe_contained: FnvHashMap<u64, u64> = steps
+        let maybe_contained: Vec<(u64, u64)> = steps
             .iter()
             .filter_map(|&(step, _, _)| {
                 let x = step as u64;
@@ -144,22 +146,25 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
 
         let contained = steps
             .iter()
-            .filter_map(|&(step, _, _)| {
+            .flat_map(|&(step, _, _)| {
                 let y = step as u64;
-                let x = maybe_contained.get(&y)?;
-                Some((*x, y))
+                maybe_contained.iter().filter_map(
+                    move |&(a, b)| {
+                        if a == y {
+                            Some((b, a))
+                        } else {
+                            None
+                        }
+                    },
+                )
             })
             .collect::<Vec<_>>();
-
 
         for &(x, y) in contained.iter() {
             remaining_ultrabubbles.remove(&x);
         }
 
-        let path_name = path.clone().to_owned();
         let bubbles = contained.into_iter().collect::<Vec<_>>();
-
-        let path_name_str: String = path_name.to_string();
 
         if !bubbles.is_empty() {
             println!(
