@@ -129,7 +129,6 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
             break;
         }
         let path_name = path.clone().to_owned();
-        let path_name_str: String = path_name.to_string();
 
         let maybe_contained: Vec<(u64, u64)> = steps
             .iter()
@@ -167,21 +166,15 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         let bubbles = contained.into_iter().collect::<Vec<_>>();
 
         if !bubbles.is_empty() {
-            println!(
-                "{:5} {:<40}\t{} bubbles\t{} remaining",
-                count,
-                path_name,
-                bubbles.len(),
-                remaining_ultrabubbles.len()
-            );
             representative_paths.push((path_name, bubbles));
         }
     }
 
-    println!("{} paths", representative_paths.len());
-    println!("{} bubbles left", remaining_ultrabubbles.len());
-
-    /*
+    info!("Chose {} reference paths", representative_paths.len());
+    info!(
+        "{} ultrabubbles did not exist in any paths",
+        remaining_ultrabubbles.len()
+    );
 
     let ultrabubble_nodes = ultrabubbles
         .iter()
@@ -191,173 +184,32 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         })
         .collect::<FnvHashSet<_>>();
 
-    let path_index = args.path_index.unwrap_or(0);
+    info!("Finding ultrabubble path indices");
+    let path_indices = variants::bubble_path_indices(&all_paths, &ultrabubble_nodes);
 
-    let mut paths = gfa
-        .paths
-        .iter()
-        .map(|p| p.iter().map(|(x, _)| x).collect::<Vec<_>>())
-        .collect::<Vec<_>>();
+    info!(
+        "Identifying variants in {} ultrabubbles",
+        ultrabubbles.len() - remaining_ultrabubbles.len()
+    );
 
-    let mut first_path = paths.remove(path_index);
+    let mut all_vcf_records = Vec::new();
 
-    // let mut first_path = gfa.paths[0].iter().map(|(x, _)| x).collect::<Vec<_>>();
+    let var_config = variants::VariantConfig {
+        ignore_inverted_paths: args.ignore_inverted_paths,
+    };
 
-    // let mut other_paths =
-
-    let end_index = args.index_arg.unwrap_or(1000);
-
-    println!("{} paths", gfa.paths.len());
-    let mut same_vec: Vec<FnvHashSet<usize>> = Vec::new();
-    for i in 0..end_index {
-        let same = paths
-            .iter()
-            .enumerate()
-            .filter_map(|(ix, steps)| {
-                if steps[i] == first_path[i] {
-                    Some(ix)
-                } else {
-                    None
-                }
-            })
-            .collect::<FnvHashSet<usize>>();
-        if i % 100 == 0 {
-            println!("{}\t{}", i, same.len());
-        }
-        same_vec.push(same);
-    }
-
-    // let first_vec = same_vec[0].clone();
-    let mut total_set = same_vec.pop().unwrap();
-    println!("total set before: {}", total_set.len());
-
-    for other in same_vec.into_iter() {
-        let intersection = total_set
-            .intersection(&other)
-            .copied()
-            .collect::<FnvHashSet<usize>>();
-        total_set = intersection;
-    }
-
-    println!("intersection: {}", total_set.len());
-    // println!("minimum: {:?}", total_set.iter().min());
-    println!("maximum: {:?}", total_set.iter().max());
-
-    */
-
-    /*
-
-    let mut path_vecs = Vec::new();
-    for i in 0..=4 {
-        let path = &gfa.paths[i];
-        let path_vec = path.iter().collect::<Vec<_>>();
-        println!("{}\t{}", i, path_vec.len());
-        path_vecs.push(path_vec);
-    }
-
-
-    println!();
-    // let mut step = 0;
-    // let mut step = 3576;
-    // let mut step = 6027;
-    // let mut step = 8783;
-    // let mut step = 12474;
-    // let mut step = 14434;
-    // let mut step = 15103;
-    // let mut step = 18061;
-    // let mut step = 21995;
-    // let mut step = 24325;
-    // let mut step = 25433;
-    // let mut step = 27351;
-    let mut step = 29000;
-    loop {
-        // let mut bases = path_vecs.iter().map(|v| v[step]).collect::<Vec<_>>();
-        let mut bases = path_vecs
-            .iter()
-            .take(4)
-            .map(|v| v[step])
-            .collect::<Vec<_>>();
-        bases.push(path_vecs[4][step + 1]);
-        // bases[4] = path_vecs[
-        let base_clone = bases.clone();
-        bases.sort_by(|x, y| x.0.cmp(&y.0));
-        bases.dedup();
-        if bases.len() != 1 {
-            for (i, (b, o)) in base_clone.iter().enumerate() {
-                println!("{}\t{:4}{}", i, b, o);
-            }
-            break;
-        }
-        step += 1;
-    }
-
-    println!("first {} steps of first 5 paths were equal", step);
-
-    for i in 0..5 {
-        let path = &gfa.paths[i];
-        let ten_bases = path
-            .iter()
-            .map(|(x, _)| x)
-            .skip(step - 5)
-            .take(25)
-            .collect::<Vec<_>>();
-        // let ten_bases = path.iter().take(25).collect::<Vec<_>>();
-
-        println!(" ~~ {} ~~ ", i);
-        for b in ten_bases.iter() {
-            print!("{:>5} ", b);
-        }
-        println!();
-        for b in ten_bases.iter() {
-            let s = segment_map.get(&b).unwrap();
-            let s: BString = s.iter().copied().collect();
-            let s = s.to_string();
-            print!("{:>5} ", s);
-        }
-        println!();
-    }
-    */
-
-    /*
-    println!("x\ty\toccurrences");
-    for ((x, y), count) in bub_path_vec {
-        println!("{}\t{}\t{}", x, y, count);
-    }
-    */
-
-    /*
-        info!("Finding ultrabubble path indices");
-        let path_indices =
-            variants::bubble_path_indices(&all_paths, &ultrabubble_nodes);
-
-        let mut all_vcf_records = Vec::new();
-
-        let var_config = variants::VariantConfig {
-            ignore_inverted_paths: args.ignore_inverted_paths,
-        };
-
-        info!(
-            "Identifying variants in {} ultrabubbles",
-            ultrabubbles.len()
-        );
-
-        let p_bar = ProgressBar::new(ultrabubbles.len() as u64);
-        p_bar.set_style(
-            ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
-                .progress_chars("##-"),
-        );
-        p_bar.enable_steady_tick(1000);
-
+    let path_count = representative_paths.len();
+    for (ix, (path_name, bubbles)) in representative_paths.into_iter().enumerate() {
+        let ref_path_name: FnvHashSet<BString> =
+            [path_name].iter().cloned().collect::<FnvHashSet<_>>();
         all_vcf_records.par_extend(
-            ultrabubbles
+            bubbles
                 .par_iter()
-                .progress_with(p_bar)
                 .filter_map(|&(from, to)| {
                     let vars = variants::detect_variants_in_sub_paths(
                         &var_config,
                         &segment_map,
-                        ref_path_names.as_ref(),
+                        Some(&ref_path_name),
                         &all_paths,
                         &path_indices,
                         from,
@@ -368,18 +220,18 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
                     Some(vcf_records)
                 })
                 .flatten(),
-        );
+        )
+    }
 
-        all_vcf_records.sort_by(|v0, v1| v0.vcf_cmp(v1));
+    // all_vcf_records.sort_by(|v0, v1| v0.vcf_cmp(v1));
 
-        let vcf_header = variants::vcf::VCFHeader::new(gfa_path);
+    let vcf_header = variants::vcf::VCFHeader::new(gfa_path);
 
-        println!("{}", vcf_header);
+    println!("{}", vcf_header);
 
-        for vcf in all_vcf_records {
-            println!("{}", vcf);
-        }
-    */
+    for vcf in all_vcf_records {
+        println!("{}", vcf);
+    }
 
     Ok(())
 }
