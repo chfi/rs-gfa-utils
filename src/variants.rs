@@ -475,7 +475,11 @@ pub fn detect_variants_in_sub_paths(
             let from = from_ix.min(to_ix);
             let to = from_ix.max(to_ix);
             let sub_path = &path[from..=to];
-            Some((path_name.as_bstr(), sub_path))
+            if sub_path.len() > 2 {
+                Some((path_name.as_bstr(), sub_path))
+            } else {
+                None
+            }
         })
         .collect();
 
