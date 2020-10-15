@@ -8,7 +8,9 @@ use std::{
 };
 use structopt::StructOpt;
 
-use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use indicatif::{
+    ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle,
+};
 use rayon::prelude::*;
 
 use gfa::gfa::{Orientation, GFA};
@@ -104,7 +106,6 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         .map(|seg| (seg.name, seg.sequence.as_ref()))
         .collect();
 
-    info!("Extracting paths and offsets from GFA");
     let all_paths = variants::gfa_paths_with_offsets(&gfa, &segment_map);
 
     info!("Finding graph ultrabubbles");
@@ -118,13 +119,22 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
 
     ultrabubbles.sort();
 
+    /*
     let mut representative_paths = Vec::new();
 
     let mut remaining_ultrabubbles: FnvHashMap<u64, u64> =
         ultrabubbles.iter().copied().collect();
 
+    info!("Building set of reference paths");
+    let p_bar = ProgressBar::new(all_paths.len() as u64);
+    p_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
+            .progress_chars("##-"),
+    );
+    // p_bar.enable_steady_tick(1000);
 
-    for (count, (path, steps)) in all_paths.iter().enumerate() {
+    for (path, steps) in all_paths.iter().progress_with(p_bar) {
         if remaining_ultrabubbles.is_empty() {
             break;
         }
@@ -175,6 +185,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         "{} ultrabubbles did not exist in any paths",
         remaining_ultrabubbles.len()
     );
+    */
 
     let ultrabubble_nodes = ultrabubbles
         .iter()
@@ -185,7 +196,8 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         .collect::<FnvHashSet<_>>();
 
     info!("Finding ultrabubble path indices");
-    let path_indices = variants::bubble_path_indices(&all_paths, &ultrabubble_nodes);
+    let path_indices =
+        variants::bubble_path_indices(&all_paths, &ultrabubble_nodes);
 
     info!(
         "Identifying variants in {} ultrabubbles",
@@ -198,10 +210,40 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         ignore_inverted_paths: args.ignore_inverted_paths,
     };
 
-    let path_count = representative_paths.len();
-    for (ix, (path_name, bubbles)) in representative_paths.into_iter().enumerate() {
+    let p_bar = ProgressBar::new(ultrabubbles.len() as u64);
+    p_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
+            .progress_chars("##-"),
+    );
+    p_bar.enable_steady_tick(1000);
+
+    all_vcf_records.par_extend(
+        ultrabubbles
+            .par_iter()
+            .progress_with(p_bar)
+            .filter_map(|&(from, to)| {
+                let vars = variants::detect_variants_in_sub_paths(
+                    &var_config,
+                    &segment_map,
+                    ref_path_names.as_ref(),
+                    &all_paths,
+                    &path_indices,
+                    from,
+                    to,
+                )?;
+
+                let vcf_records = variants::variant_vcf_record(&vars);
+                Some(vcf_records)
+            })
+            .flatten(),
+    );
+
+    /*
+    for (path_name, bubbles) in representative_paths.into_iter().progress_with(p_bar) {
         let ref_path_name: FnvHashSet<BString> =
             [path_name].iter().cloned().collect::<FnvHashSet<_>>();
+        let before_len = all_vcf_records.len();
         all_vcf_records.par_extend(
             bubbles
                 .par_iter()
@@ -220,10 +262,14 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
                     Some(vcf_records)
                 })
                 .flatten(),
-        )
+        );
+        let after_len = all_vcf_records.len();
+        // info!("\tfound {} variants", after_len - before_len);
     }
+    */
 
-    // all_vcf_records.sort_by(|v0, v1| v0.vcf_cmp(v1));
+    all_vcf_records.sort_by(|v0, v1| v0.vcf_cmp(v1));
+    all_vcf_records.dedup();
 
     let vcf_header = variants::vcf::VCFHeader::new(gfa_path);
 

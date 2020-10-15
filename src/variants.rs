@@ -116,6 +116,7 @@ pub fn gfa_paths_with_offsets(
 
     let p_bar = progress_bar(gfa.paths.len(), false);
 
+    info!("Extracting paths and offsets from GFA");
     path_map.par_extend(gfa.paths.par_iter().progress_with(p_bar).map(
         |path| {
             let name = path.path_name.clone();
@@ -466,7 +467,7 @@ pub fn detect_variants_in_sub_paths(
     let mut variants: FnvHashMap<BString, FnvHashMap<_, FnvHashSet<_>>> =
         FnvHashMap::default();
 
-    let sub_paths: FnvHashMap<&BStr, &[(usize, usize, Orientation)]> = paths
+    let sub_paths: Vec<(&BStr, &[(usize, usize, Orientation)])> = paths
         .iter()
         .filter_map(|(path_name, path)| {
             let from_ix = *from_indices.get(path_name)?;
@@ -477,6 +478,16 @@ pub fn detect_variants_in_sub_paths(
             Some((path_name.as_bstr(), sub_path))
         })
         .collect();
+
+    let mut query_paths = sub_paths.clone();
+
+    query_paths.sort_by(|(_, v), (_, w)| {
+        let v_iter = v.iter().map(|(a, b, c)| (a, b, bool::from(*c)));
+        let w_iter = w.iter().map(|(a, b, c)| (a, b, bool::from(*c)));
+        v_iter.cmp(w_iter)
+    });
+
+    query_paths.dedup_by(|(_, v), (_, w)| v == w);
 
     let is_ref_path = |p: &BStr| {
         if let Some(ref_path_names) = ref_path_names {
@@ -495,7 +506,7 @@ pub fn detect_variants_in_sub_paths(
         let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
             FnvHashMap::default();
 
-        for (query_name, query_path) in sub_paths.iter() {
+        for (query_name, query_path) in query_paths.iter() {
             let query_orient = sub_path_edge_orient(query_path);
 
             if ref_name != query_name
