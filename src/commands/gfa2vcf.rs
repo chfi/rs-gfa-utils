@@ -1,9 +1,8 @@
-use bstr::{io::*, BStr, BString, ByteSlice, ByteVec};
+use bstr::{io::*, BString};
 use fnv::{FnvHashMap, FnvHashSet};
 use std::{
     fs::File,
-    io::Write,
-    io::{BufReader, Read},
+    io::{BufReader},
     path::PathBuf,
 };
 use structopt::StructOpt;
@@ -119,74 +118,6 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
 
     ultrabubbles.sort();
 
-    /*
-    let mut representative_paths = Vec::new();
-
-    let mut remaining_ultrabubbles: FnvHashMap<u64, u64> =
-        ultrabubbles.iter().copied().collect();
-
-    info!("Building set of reference paths");
-    let p_bar = ProgressBar::new(all_paths.len() as u64);
-    p_bar.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
-            .progress_chars("##-"),
-    );
-    // p_bar.enable_steady_tick(1000);
-
-    for (path, steps) in all_paths.iter().progress_with(p_bar) {
-        if remaining_ultrabubbles.is_empty() {
-            break;
-        }
-        let path_name = path.clone().to_owned();
-
-        let maybe_contained: Vec<(u64, u64)> = steps
-            .iter()
-            .filter_map(|&(step, _, _)| {
-                let x = step as u64;
-                let y = remaining_ultrabubbles.get(&x)?;
-                Some((*y, x))
-            })
-            .collect();
-
-        if maybe_contained.is_empty() {
-            continue;
-        }
-
-        let contained = steps
-            .iter()
-            .flat_map(|&(step, _, _)| {
-                let y = step as u64;
-                maybe_contained.iter().filter_map(
-                    move |&(a, b)| {
-                        if a == y {
-                            Some((b, a))
-                        } else {
-                            None
-                        }
-                    },
-                )
-            })
-            .collect::<Vec<_>>();
-
-        for &(x, y) in contained.iter() {
-            remaining_ultrabubbles.remove(&x);
-        }
-
-        let bubbles = contained.into_iter().collect::<Vec<_>>();
-
-        if !bubbles.is_empty() {
-            representative_paths.push((path_name, bubbles));
-        }
-    }
-
-    info!("Chose {} reference paths", representative_paths.len());
-    info!(
-        "{} ultrabubbles did not exist in any paths",
-        remaining_ultrabubbles.len()
-    );
-    */
-
     let ultrabubble_nodes = ultrabubbles
         .iter()
         .flat_map(|&(a, b)| {
@@ -199,16 +130,16 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
     let path_indices =
         variants::bubble_path_indices(&all_paths, &ultrabubble_nodes);
 
-    info!(
-        "Identifying variants in {} ultrabubbles",
-        ultrabubbles.len() - remaining_ultrabubbles.len()
-    );
-
     let mut all_vcf_records = Vec::new();
 
     let var_config = variants::VariantConfig {
         ignore_inverted_paths: args.ignore_inverted_paths,
     };
+
+    info!(
+        "Identifying variants in {} ultrabubbles",
+        ultrabubbles.len()
+    );
 
     let p_bar = ProgressBar::new(ultrabubbles.len() as u64);
     p_bar.set_style(
@@ -238,6 +169,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
             })
             .flatten(),
     );
+    info!("Variant identification complete");
 
     /*
     for (path_name, bubbles) in representative_paths.into_iter().progress_with(p_bar) {
@@ -280,4 +212,75 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[allow(dead_code)]
+fn find_representative_paths(
+    ultrabubbles: &Vec<(u64, u64)>,
+    all_paths: &FnvHashMap<BString, Vec<(usize, usize, Orientation)>>,
+) -> Vec<(BString, Vec<(u64, u64)>)> {
+    let mut representative_paths = Vec::new();
+
+    let mut remaining_ultrabubbles: FnvHashMap<u64, u64> =
+        ultrabubbles.iter().copied().collect();
+
+    info!("Building set of reference paths");
+    let p_bar = ProgressBar::new(all_paths.len() as u64);
+    p_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
+            .progress_chars("##-"),
+    );
+
+    for (path, steps) in all_paths.iter().progress_with(p_bar) {
+        if remaining_ultrabubbles.is_empty() {
+            break;
+        }
+        let path_name = path.clone().to_owned();
+
+        let maybe_contained: Vec<(u64, u64)> = steps
+            .iter()
+            .filter_map(|&(step, _, _)| {
+                let x = step as u64;
+                let y = remaining_ultrabubbles.get(&x)?;
+                Some((*y, x))
+            })
+            .collect();
+
+        if maybe_contained.is_empty() {
+            continue;
+        }
+
+        let contained = steps
+            .iter()
+            .flat_map(|&(step, _, _)| {
+                let y = step as u64;
+                maybe_contained.iter().filter_map(move |&(a, b)| {
+                    if a == y {
+                        Some((b, a))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for &(x, _y) in contained.iter() {
+            remaining_ultrabubbles.remove(&x);
+        }
+
+        let bubbles = contained.into_iter().collect::<Vec<_>>();
+
+        if !bubbles.is_empty() {
+            representative_paths.push((path_name, bubbles));
+        }
+    }
+
+    info!("Chose {} reference paths", representative_paths.len());
+    info!(
+        "{} ultrabubbles did not exist in any paths",
+        remaining_ultrabubbles.len()
+    );
+
+    representative_paths
 }

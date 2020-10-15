@@ -94,7 +94,7 @@ pub fn bubble_path_indices(
     {
         debug!("Transposing path/ultrabubble node index map");
         let p_bar = progress_bar(vertices.len(), true);
-        for (ix, &node) in vertices.iter().enumerate().progress_with(p_bar) {
+        for &node in vertices.iter().progress_with(p_bar) {
             for (path_name, step_map) in transposed.iter() {
                 if let Some(ix) = step_map.get(&node) {
                     let path_name = path_name.clone().to_owned();
