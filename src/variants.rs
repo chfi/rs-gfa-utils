@@ -58,81 +58,52 @@ pub fn oriented_sequence<T: AsRef<[u8]>>(
 }
 
 pub fn bubble_path_indices(
-    paths: &FnvHashMap<BString, Vec<(usize, usize, Orientation)>>,
+    paths: &Vec<Vec<(usize, usize, Orientation)>>,
     vertices: &FnvHashSet<u64>,
-) -> FnvHashMap<u64, FnvHashMap<BString, usize>> {
-    let mut path_map: FnvHashMap<u64, FnvHashMap<BString, usize>> =
+) -> FnvHashMap<u64, FnvHashMap<usize, usize>> {
+    let mut path_map: FnvHashMap<u64, FnvHashMap<usize, usize>> =
         FnvHashMap::default();
 
-    let mut transposed: FnvHashMap<BString, FnvHashMap<u64, usize>> =
+    let mut transposed: FnvHashMap<usize, FnvHashMap<u64, usize>> =
         FnvHashMap::default();
 
     {
         debug!("Finding ultrabubble node indices for {} paths", paths.len());
         let p_bar = progress_bar(paths.len(), false);
-        transposed.par_extend(paths.par_iter().progress_with(p_bar).map(
-            |(path_name, path)| {
-                let node_indices: FnvHashMap<u64, usize> = path
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(ix, &(step, _, _))| {
-                        let step = step as u64;
-                        if vertices.contains(&step) {
-                            Some((step, ix))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
+        transposed.par_extend(
+            paths.par_iter().enumerate().progress_with(p_bar).map(
+                |(path_ix, path)| {
+                    let node_indices: FnvHashMap<u64, usize> = path
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(ix, &(step, _, _))| {
+                            let step = step as u64;
+                            if vertices.contains(&step) {
+                                Some((step, ix))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
 
-                let path_name = path_name.clone().to_owned();
-                (path_name, node_indices)
-            },
-        ));
+                    (path_ix, node_indices)
+                },
+            ),
+        );
     }
 
     {
         debug!("Transposing path/ultrabubble node index map");
         let p_bar = progress_bar(vertices.len(), true);
         for &node in vertices.iter().progress_with(p_bar) {
-            for (path_name, step_map) in transposed.iter() {
+            for (path_ix, step_map) in transposed.iter() {
                 if let Some(ix) = step_map.get(&node) {
-                    let path_name = path_name.clone().to_owned();
                     let entry = path_map.entry(node).or_default();
-                    entry.insert(path_name, *ix);
+                    entry.insert(*path_ix, *ix);
                 }
             }
         }
     }
-
-    path_map
-}
-
-pub fn gfa_paths_with_offsets(
-    gfa: &GFA<usize, ()>,
-    seg_seq_map: &FnvHashMap<usize, &[u8]>,
-) -> FnvHashMap<BString, Vec<(usize, usize, Orientation)>> {
-    let mut path_map: FnvHashMap<BString, Vec<_>> = FnvHashMap::default();
-
-    let p_bar = progress_bar(gfa.paths.len(), false);
-
-    info!("Extracting paths and offsets from GFA");
-    path_map.par_extend(gfa.paths.par_iter().progress_with(p_bar).map(
-        |path| {
-            let name = path.path_name.clone();
-            let steps: Vec<(usize, usize, Orientation)> = path
-                .iter()
-                .scan(1, |offset, (step, orient)| {
-                    let step_offset = *offset;
-                    let step_len = seg_seq_map.get(&step).unwrap().len();
-                    *offset += step_len;
-                    Some((step, step_offset, orient))
-                })
-                .collect();
-
-            (name, steps)
-        },
-    ));
 
     path_map
 }
@@ -285,7 +256,7 @@ impl std::fmt::Display for Variant {
 }
 
 pub fn detect_variants_against_ref(
-    segment_sequences: &FnvHashMap<usize, &[u8]>,
+    segment_sequences: &FnvHashMap<usize, BString>,
     ref_name: &[u8],
     ref_path: &[(usize, usize, Orientation)],
     query_path: &[(usize, usize, Orientation)],
@@ -454,10 +425,11 @@ impl Default for VariantConfig {
 
 pub fn detect_variants_in_sub_paths(
     variant_config: &VariantConfig,
-    segment_sequences: &FnvHashMap<usize, &[u8]>,
+    segment_sequences: &FnvHashMap<usize, BString>,
+    path_names: &[BString],
+    paths: &[Vec<(usize, usize, Orientation)>],
     ref_path_names: Option<&FnvHashSet<BString>>,
-    paths: &FnvHashMap<BString, Vec<(usize, usize, Orientation)>>,
-    path_indices: &FnvHashMap<u64, FnvHashMap<BString, usize>>,
+    path_indices: &FnvHashMap<u64, FnvHashMap<usize, usize>>,
     from: u64,
     to: u64,
 ) -> Option<FnvHashMap<BString, FnvHashMap<VariantKey, FnvHashSet<Variant>>>> {
@@ -467,16 +439,17 @@ pub fn detect_variants_in_sub_paths(
     let mut variants: FnvHashMap<BString, FnvHashMap<_, FnvHashSet<_>>> =
         FnvHashMap::default();
 
-    let sub_paths: Vec<(&BStr, &[(usize, usize, Orientation)])> = paths
+    let sub_paths: Vec<(usize, &[(usize, usize, Orientation)])> = paths
         .iter()
-        .filter_map(|(path_name, path)| {
-            let from_ix = *from_indices.get(path_name)?;
-            let to_ix = *to_indices.get(path_name)?;
+        .enumerate()
+        .filter_map(|(path_ix, path)| {
+            let from_ix = *from_indices.get(&path_ix)?;
+            let to_ix = *to_indices.get(&path_ix)?;
             let from = from_ix.min(to_ix);
             let to = from_ix.max(to_ix);
             let sub_path = &path[from..=to];
             if sub_path.len() > 2 {
-                Some((path_name.as_bstr(), sub_path))
+                Some((path_ix, sub_path))
             } else {
                 None
             }
@@ -501,8 +474,9 @@ pub fn detect_variants_in_sub_paths(
         }
     };
 
-    variants.extend(sub_paths.iter().filter_map(|(ref_name, ref_path)| {
-        if !is_ref_path(ref_name) {
+    variants.extend(sub_paths.iter().filter_map(|(ref_ix, ref_path)| {
+        let ref_name = path_names.get(*ref_ix)?;
+        if !is_ref_path(ref_name.as_ref()) {
             return None;
         }
         let ref_orient = sub_path_edge_orient(ref_path);
@@ -510,7 +484,8 @@ pub fn detect_variants_in_sub_paths(
         let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
             FnvHashMap::default();
 
-        for (query_name, query_path) in query_paths.iter() {
+        for (query_ix, query_path) in query_paths.iter() {
+            let query_name = path_names.get(*query_ix)?;
             let query_orient = sub_path_edge_orient(query_path);
 
             if ref_name != query_name

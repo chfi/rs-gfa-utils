@@ -1,10 +1,6 @@
 use bstr::{io::*, BString};
 use fnv::{FnvHashMap, FnvHashSet};
-use std::{
-    fs::File,
-    io::{BufReader},
-    path::PathBuf,
-};
+use std::{fs::File, io::BufReader, path::PathBuf};
 use structopt::StructOpt;
 
 use indicatif::{
@@ -63,6 +59,64 @@ fn paths_list(paths: Vec<String>) -> Vec<BString> {
     paths.into_iter().map(BString::from).collect()
 }
 
+fn progress_bar(len: usize, steady: bool) -> ProgressBar {
+    let p_bar = ProgressBar::new(len as u64);
+    p_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
+            .progress_chars("##-"),
+    );
+    if steady {
+        p_bar.enable_steady_tick(1000);
+    }
+    p_bar
+}
+
+struct PathData {
+    segment_map: FnvHashMap<usize, BString>,
+    path_names: Vec<BString>,
+    paths: Vec<Vec<(usize, usize, Orientation)>>,
+}
+
+fn gfa_path_data(mut gfa: GFA<usize, ()>) -> PathData {
+    let segments = std::mem::take(&mut gfa.segments);
+
+    let segment_map: FnvHashMap<usize, BString> = segments
+        .into_iter()
+        .map(|seg| (seg.name, seg.sequence))
+        .collect();
+
+    let gfa_paths = std::mem::take(&mut gfa.paths);
+
+    let p_bar = progress_bar(gfa_paths.len(), false);
+
+    let (path_names, paths): (Vec<_>, Vec<_>) = gfa_paths
+        .into_par_iter()
+        .progress_with(p_bar)
+        .map(|mut path| {
+            let steps: Vec<(usize, usize, Orientation)> = path
+                .iter()
+                .scan(1, |offset, (step, orient)| {
+                    let step_offset = *offset;
+                    let step_len = segment_map.get(&step).unwrap().len();
+                    *offset += step_len;
+                    Some((step, step_offset, orient))
+                })
+                .collect();
+
+            let path_name = std::mem::take(&mut path.path_name);
+
+            (path_name, steps)
+        })
+        .unzip();
+
+    PathData {
+        segment_map,
+        path_names,
+        paths,
+    }
+}
+
 pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
     let ref_paths_list = args.ref_paths_vec.map(paths_list).unwrap_or_default();
 
@@ -90,22 +144,17 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         }
     };
 
-    let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
+    let path_data = {
+        let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
 
-    if gfa.paths.len() < 2 {
-        panic!("GFA must contain at least two paths");
-    }
+        if gfa.paths.len() < 2 {
+            panic!("GFA must contain at least two paths");
+        }
 
-    info!("GFA has {} paths", gfa.paths.len());
+        info!("GFA has {} paths", gfa.paths.len());
 
-    info!("Building map from segment IDs to sequences");
-    let segment_map: FnvHashMap<usize, &[u8]> = gfa
-        .segments
-        .iter()
-        .map(|seg| (seg.name, seg.sequence.as_ref()))
-        .collect();
-
-    let all_paths = variants::gfa_paths_with_offsets(&gfa, &segment_map);
+        gfa_path_data(gfa)
+    };
 
     info!("Finding graph ultrabubbles");
     let mut ultrabubbles = if let Some(path) = &args.ultrabubbles_file {
@@ -128,7 +177,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
 
     info!("Finding ultrabubble path indices");
     let path_indices =
-        variants::bubble_path_indices(&all_paths, &ultrabubble_nodes);
+        variants::bubble_path_indices(&path_data.paths, &ultrabubble_nodes);
 
     let mut all_vcf_records = Vec::new();
 
@@ -156,9 +205,10 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
             .filter_map(|&(from, to)| {
                 let vars = variants::detect_variants_in_sub_paths(
                     &var_config,
-                    &segment_map,
+                    &path_data.segment_map,
+                    &path_data.path_names,
+                    &path_data.paths,
                     ref_path_names.as_ref(),
-                    &all_paths,
                     &path_indices,
                     from,
                     to,
