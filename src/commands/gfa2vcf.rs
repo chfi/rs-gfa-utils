@@ -81,6 +81,7 @@ struct PathData {
 fn gfa_path_data(mut gfa: GFA<usize, ()>) -> PathData {
     let segments = std::mem::take(&mut gfa.segments);
 
+    info!("Building map from segment IDs to sequences");
     let segment_map: FnvHashMap<usize, BString> = segments
         .into_iter()
         .map(|seg| (seg.name, seg.sequence))
@@ -90,6 +91,7 @@ fn gfa_path_data(mut gfa: GFA<usize, ()>) -> PathData {
 
     let p_bar = progress_bar(gfa_paths.len(), false);
 
+    info!("Extracting paths and offsets from GFA");
     let (path_names, paths): (Vec<_>, Vec<_>) = gfa_paths
         .into_par_iter()
         .progress_with(p_bar)
@@ -156,7 +158,6 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         gfa_path_data(gfa)
     };
 
-    info!("Finding graph ultrabubbles");
     let mut ultrabubbles = if let Some(path) = &args.ultrabubbles_file {
         super::saboten::load_ultrabubbles(path)
     } else {
@@ -175,7 +176,6 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         })
         .collect::<FnvHashSet<_>>();
 
-    info!("Finding ultrabubble path indices");
     let path_indices =
         variants::bubble_path_indices(&path_data.paths, &ultrabubble_nodes);
 
@@ -190,13 +190,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         ultrabubbles.len()
     );
 
-    let p_bar = ProgressBar::new(ultrabubbles.len() as u64);
-    p_bar.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
-            .progress_chars("##-"),
-    );
-    p_bar.enable_steady_tick(1000);
+    let p_bar = progress_bar(ultrabubbles.len());
 
     all_vcf_records.par_extend(
         ultrabubbles
@@ -220,6 +214,21 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
             .flatten(),
     );
     info!("Variant identification complete");
+
+    all_vcf_records.sort_by(|v0, v1| v0.vcf_cmp(v1));
+    all_vcf_records.dedup();
+
+    info!("Writing {} unique VCF records", all_vcf_records.len());
+
+    let vcf_header = variants::vcf::VCFHeader::new(gfa_path);
+
+    println!("{}", vcf_header);
+
+    for vcf in all_vcf_records {
+        println!("{}", vcf);
+    }
+
+    Ok(())
 
     /*
     for (path_name, bubbles) in representative_paths.into_iter().progress_with(p_bar) {
@@ -249,19 +258,6 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         // info!("\tfound {} variants", after_len - before_len);
     }
     */
-
-    all_vcf_records.sort_by(|v0, v1| v0.vcf_cmp(v1));
-    all_vcf_records.dedup();
-
-    let vcf_header = variants::vcf::VCFHeader::new(gfa_path);
-
-    println!("{}", vcf_header);
-
-    for vcf in all_vcf_records {
-        println!("{}", vcf);
-    }
-
-    Ok(())
 }
 
 #[allow(dead_code)]

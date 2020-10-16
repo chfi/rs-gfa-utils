@@ -61,9 +61,6 @@ pub fn bubble_path_indices(
     paths: &Vec<Vec<(usize, usize, Orientation)>>,
     vertices: &FnvHashSet<u64>,
 ) -> FnvHashMap<u64, FnvHashMap<usize, usize>> {
-    let mut path_map: FnvHashMap<u64, FnvHashMap<usize, usize>> =
-        FnvHashMap::default();
-
     let mut transposed: FnvHashMap<usize, FnvHashMap<u64, usize>> =
         FnvHashMap::default();
 
@@ -92,18 +89,23 @@ pub fn bubble_path_indices(
         );
     }
 
-    {
-        debug!("Transposing path/ultrabubble node index map");
-        let p_bar = progress_bar(vertices.len(), true);
-        for &node in vertices.iter().progress_with(p_bar) {
-            for (path_ix, step_map) in transposed.iter() {
-                if let Some(ix) = step_map.get(&node) {
-                    let entry = path_map.entry(node).or_default();
-                    entry.insert(*path_ix, *ix);
-                }
-            }
-        }
-    }
+    debug!("Transposing path/ultrabubble node index map");
+    let p_bar = progress_bar(vertices.len(), true);
+
+    let path_map: FnvHashMap<u64, FnvHashMap<usize, usize>> = vertices
+        .par_iter()
+        .progress_with(p_bar)
+        .map(|&node| {
+            let inner = transposed
+                .iter()
+                .filter_map(|(path_ix, step_map)| {
+                    let ix = step_map.get(&node)?;
+                    Some((*path_ix, *ix))
+                })
+                .collect();
+            (node, inner)
+        })
+        .collect();
 
     path_map
 }
