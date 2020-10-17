@@ -23,26 +23,45 @@ The compiled binary will be located at `target/release/gfautil`.
 
 ```bash
 $ gfautil
-gfautil 0.2.0
+gfautil 0.3.0
 
 USAGE:
-    gfautil --gfa <input GFA file> <SUBCOMMAND>
+    gfautil [FLAGS] [OPTIONS] -i <input GFA file> <SUBCOMMAND>
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+        --debug
+            Show debug messages
+
+    -h, --help
+            Prints help information
+
+        --info
+            Show info messages
+
+        --quiet
+            Show no messages
+
+    -V, --version
+            Prints version information
+
 
 OPTIONS:
-    -i, --gfa <input GFA file>
+    -i <input GFA file>
+
+
+    -t, --threads <threads>
+            The number of threads to use when applicable. If omitted, Rayon's default will be used, based on the
+            RAYON_NUM_THREADS environment variable, or the number of logical CPUs
 
 SUBCOMMANDS:
     edge-count
-    gaf2paf                      Convert a file of GAF records into PAF records
-    gfa-segment-id-conversion    Convert a GFA with string names to one with integer names, and back
-    gfa2vcf                      Output a VCF for the given GFA, using the graph's ultrabubbles to identify areas of
-                                 variation. (experimental!)
-    help                         Prints this message or the help of the given subcommand(s)
-    subgraph                     Generate a subgraph of the input GFA
+    gaf2paf         Convert a file of GAF records into PAF records
+    gfa2vcf         Output a VCF for the given GFA, using the graph's ultrabubbles to identify areas of variation.
+                    (experimental!)
+    help            Prints this message or the help of the given subcommand(s)
+    id-convert      Convert a GFA with string names to one with integer names, and back
+    subgraph        Generate a subgraph of the input GFA
+    ultrabubbles
 ```
 
 
@@ -55,13 +74,13 @@ record, a corresponding PAF record is produced.
 Convert `example.gaf`, via `example.gfa`, with output on stdout:
 
 ```bash
-gfautil --gfa ./example.gfa gaf2paf --gaf ./example.gaf
+gfautil -i ./example.gfa gaf2paf --gaf ./example.gaf
 ```
 
 Save output to `out.paf`:
 
 ```bash
-gfautil --gfa ./example.gfa gaf2paf --gaf ./example.gaf -o out.paf
+gfautil -i ./example.gfa gaf2paf --gaf ./example.gaf -o out.paf
 ```
 
 
@@ -72,22 +91,29 @@ variants. For each ultrabubble, the section covered by the bubble is
 extracted from each embedded path. Those sub-paths are then compared
 pairwise.
 
+The `-u` option can be used to load the ultrabubbles from a file (output
+by the `ultrabubbles` command) instead of computing them.
+
 Currently the variant identification is mostly based on the nodes that
 make up each path, and only barely takes the sequences into account.
 
 Outputs is in the VCF format, on stdout.
 
 ```bash
-gfautil --gfa ./example.gfa variant
+gfautil -i ./example.gfa gfa2vcf
 ```
 
 There's a setting to skip comparing a pair of paths if their
 orientations at the start and end of the bubble don't match:
 
 ```bash
-gfautil --gfa ./example.gfa variant --no-inv
+gfautil -i ./example.gfa gfa2vcf --no-inv
 ```
 
+Loading the list of ultrabubbles from a file:
+```bash
+gfautil -i ./example.gfa gfa2vcf -u example.ultrabubbles
+```
 
 ## Subgraph
 
@@ -98,7 +124,7 @@ of those segments. If path names are provided, the segments in the
 given paths are used instead.
 
 ```bash
-gfautil --gfa example.gfa subgraph segments --names s1 s2 s3
+gfautil -i example.gfa subgraph segments --names s1 s2 s3
 ```
 
 ```bash
@@ -106,9 +132,9 @@ cat names.txt
 s1
 s2
 s3
-gfautil --gfa example.gfa subgraph segments --file names.txt
+gfautil -i example.gfa subgraph segments --file names.txt
 ```
 
 ```bash
-gfautil --gfa example.gfa subgraph paths --names p1 p2
+gfautil -i example.gfa subgraph paths --names p1 p2
 ```

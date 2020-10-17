@@ -41,8 +41,7 @@ struct LogOpt {
 struct Opt {
     #[structopt(name = "input GFA file", short, parse(from_os_str))]
     in_gfa: PathBuf,
-    // #[structopt(subcommand)]
-    #[structopt(flatten)]
+    #[structopt(subcommand)]
     command: Command,
     #[structopt(flatten)]
     log_opts: LogOpt,

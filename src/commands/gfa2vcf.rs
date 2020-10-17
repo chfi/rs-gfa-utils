@@ -18,7 +18,7 @@ use crate::{variants, variants::PathStep};
 use super::{load_gfa, Result};
 
 /// Output a VCF for the given GFA, using the graph's ultrabubbles to
-/// identify areas of variation. (experimental!)
+/// identify areas of variation.
 #[derive(StructOpt, Debug)]
 pub struct GFA2VCFArgs {
     /// Load ultrabubbles from a file instead of calculating them.
