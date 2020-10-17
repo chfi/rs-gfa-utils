@@ -63,8 +63,7 @@ fn segment_id_to_usize(
     args: &GfaIdConvertArgs,
 ) -> Result<()> {
     let name_map = if let Some(ref path) = &args.name_map_path {
-        let map = NameMap::load_json(&path)?;
-        map
+        NameMap::load_json(&path)?
     } else {
         NameMap::build_from_gfa(&gfa)
     };

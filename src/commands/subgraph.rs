@@ -48,7 +48,7 @@ pub fn subgraph(gfa_path: &PathBuf, args: &SubgraphArgs) -> Result<()> {
     let gfa: GFA<BString, OptionalFields> = load_gfa(gfa_path)?;
 
     let names: Vec<Vec<u8>> = if let Some(list) = &args.list {
-        list.into_iter().map(|s| s.bytes().collect()).collect()
+        list.iter().map(|s| s.bytes().collect()).collect()
     } else {
         let in_lines = if let Some(path) = &args.file {
             byte_lines_iter(File::open(path).unwrap())

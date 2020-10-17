@@ -48,10 +48,9 @@ pub fn find_ultrabubbles(gfa_path: &PathBuf) -> Result<Vec<(u64, u64)>> {
     debug!("Building biedged graph");
 
     let be_graph = BiedgedGraph::from_gfa(&gfa);
-    let orig_graph = be_graph.clone();
 
     debug!("Building cactus graph");
-    let cactus_graph = CactusGraph::from_biedged_graph(&orig_graph);
+    let cactus_graph = CactusGraph::from_biedged_graph(&be_graph);
 
     debug!("Building cactus tree");
     let cactus_tree = CactusTree::from_cactus_graph(&cactus_graph);
