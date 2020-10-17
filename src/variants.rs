@@ -5,17 +5,10 @@ use vcf::VCFRecord;
 use bio::alphabets::dna;
 use bstr::{BStr, BString, ByteSlice};
 use fnv::{FnvHashMap, FnvHashSet};
-use gfa::{
-    cigar::CIGAR,
-    gfa::{Orientation, Path, GFA},
-    optfields::OptFields,
-};
-use handlegraph::{handle::*, handlegraph::*};
-
-use indicatif::{
-    ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle,
-};
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
+
+use gfa::gfa::{Orientation, GFA};
 
 fn progress_bar(len: usize, steady: bool) -> ProgressBar {
     let p_bar = ProgressBar::new(len as u64);
@@ -33,18 +26,6 @@ fn progress_bar(len: usize, steady: bool) -> ProgressBar {
 #[allow(unused_imports)]
 use log::{debug, info, trace, warn};
 
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct SubPath<'a> {
-    pub path_name: BString,
-    pub steps: Vec<(usize, Orientation, Option<&'a CIGAR>)>,
-}
-
-impl<'a> SubPath<'a> {
-    pub fn segment_ids(&self) -> impl Iterator<Item = usize> + '_ {
-        self.steps.iter().map(|x| x.0)
-    }
-}
-
 pub fn oriented_sequence<T: AsRef<[u8]>>(
     seq: T,
     orient: Orientation,
@@ -57,8 +38,57 @@ pub fn oriented_sequence<T: AsRef<[u8]>>(
     }
 }
 
+pub type PathStep = (usize, usize, Orientation);
+
+pub struct PathData {
+    pub segment_map: FnvHashMap<usize, BString>,
+    pub path_names: Vec<BString>,
+    pub paths: Vec<Vec<PathStep>>,
+}
+
+pub fn gfa_path_data(mut gfa: GFA<usize, ()>) -> PathData {
+    let segments = std::mem::take(&mut gfa.segments);
+
+    info!("Building map from segment IDs to sequences");
+    let segment_map: FnvHashMap<usize, BString> = segments
+        .into_iter()
+        .map(|seg| (seg.name, seg.sequence))
+        .collect();
+
+    let gfa_paths = std::mem::take(&mut gfa.paths);
+
+    let p_bar = progress_bar(gfa_paths.len(), false);
+
+    info!("Extracting paths and offsets from GFA");
+    let (path_names, paths): (Vec<_>, Vec<_>) = gfa_paths
+        .into_par_iter()
+        .progress_with(p_bar)
+        .map(|mut path| {
+            let steps: Vec<(usize, usize, Orientation)> = path
+                .iter()
+                .scan(1, |offset, (step, orient)| {
+                    let step_offset = *offset;
+                    let step_len = segment_map.get(&step).unwrap().len();
+                    *offset += step_len;
+                    Some((step, step_offset, orient))
+                })
+                .collect();
+
+            let path_name = std::mem::take(&mut path.path_name);
+
+            (path_name, steps)
+        })
+        .unzip();
+
+    PathData {
+        segment_map,
+        path_names,
+        paths,
+    }
+}
+
 pub fn bubble_path_indices(
-    paths: &Vec<Vec<(usize, usize, Orientation)>>,
+    paths: &[Vec<(usize, usize, Orientation)>],
     vertices: &FnvHashSet<u64>,
 ) -> FnvHashMap<u64, FnvHashMap<usize, usize>> {
     let mut transposed: FnvHashMap<usize, FnvHashMap<u64, usize>> =
@@ -306,9 +336,7 @@ impl Default for VariantConfig {
 
 pub fn detect_variants_in_sub_paths(
     variant_config: &VariantConfig,
-    segment_sequences: &FnvHashMap<usize, BString>,
-    path_names: &[BString],
-    paths: &[Vec<(usize, usize, Orientation)>],
+    path_data: &PathData,
     ref_path_names: Option<&FnvHashSet<BString>>,
     path_indices: &FnvHashMap<u64, FnvHashMap<usize, usize>>,
     from: u64,
@@ -320,7 +348,8 @@ pub fn detect_variants_in_sub_paths(
     let mut variants: FnvHashMap<BString, FnvHashMap<_, FnvHashSet<_>>> =
         FnvHashMap::default();
 
-    let sub_paths: Vec<(usize, &[(usize, usize, Orientation)])> = paths
+    let sub_paths: Vec<(usize, &[PathStep])> = path_data
+        .paths
         .iter()
         .enumerate()
         .filter_map(|(path_ix, path)| {
@@ -356,7 +385,7 @@ pub fn detect_variants_in_sub_paths(
     };
 
     variants.extend(sub_paths.iter().filter_map(|(ref_ix, ref_path)| {
-        let ref_name = path_names.get(*ref_ix)?;
+        let ref_name = path_data.path_names.get(*ref_ix)?;
         if !is_ref_path(ref_name.as_ref()) {
             return None;
         }
@@ -366,14 +395,14 @@ pub fn detect_variants_in_sub_paths(
             FnvHashMap::default();
 
         for (query_ix, query_path) in query_paths.iter() {
-            let query_name = path_names.get(*query_ix)?;
+            let query_name = path_data.path_names.get(*query_ix)?;
             let query_orient = sub_path_edge_orient(query_path);
 
             if ref_name != query_name
                 && !variant_config.ignore_path(ref_orient, query_orient)
             {
                 let vars = detect_variants_against_ref(
-                    segment_sequences,
+                    &path_data.segment_map,
                     ref_name,
                     ref_path,
                     query_path,
@@ -383,7 +412,7 @@ pub fn detect_variants_in_sub_paths(
             }
         }
 
-        let ref_name: BString = ref_name.clone().to_owned();
+        let ref_name: BString = ref_name.clone();
         Some((ref_name, ref_map))
     }));
 

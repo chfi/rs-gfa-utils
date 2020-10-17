@@ -8,12 +8,12 @@ use indicatif::{
 };
 use rayon::prelude::*;
 
-use gfa::gfa::{Orientation, GFA};
+use gfa::gfa::GFA;
 
 #[allow(unused_imports)]
 use log::{debug, info, log_enabled, warn};
 
-use crate::variants;
+use crate::{variants, variants::PathStep};
 
 use super::{load_gfa, Result};
 
@@ -72,53 +72,6 @@ fn progress_bar(len: usize, steady: bool) -> ProgressBar {
     p_bar
 }
 
-struct PathData {
-    segment_map: FnvHashMap<usize, BString>,
-    path_names: Vec<BString>,
-    paths: Vec<Vec<(usize, usize, Orientation)>>,
-}
-
-fn gfa_path_data(mut gfa: GFA<usize, ()>) -> PathData {
-    let segments = std::mem::take(&mut gfa.segments);
-
-    info!("Building map from segment IDs to sequences");
-    let segment_map: FnvHashMap<usize, BString> = segments
-        .into_iter()
-        .map(|seg| (seg.name, seg.sequence))
-        .collect();
-
-    let gfa_paths = std::mem::take(&mut gfa.paths);
-
-    let p_bar = progress_bar(gfa_paths.len(), false);
-
-    info!("Extracting paths and offsets from GFA");
-    let (path_names, paths): (Vec<_>, Vec<_>) = gfa_paths
-        .into_par_iter()
-        .progress_with(p_bar)
-        .map(|mut path| {
-            let steps: Vec<(usize, usize, Orientation)> = path
-                .iter()
-                .scan(1, |offset, (step, orient)| {
-                    let step_offset = *offset;
-                    let step_len = segment_map.get(&step).unwrap().len();
-                    *offset += step_len;
-                    Some((step, step_offset, orient))
-                })
-                .collect();
-
-            let path_name = std::mem::take(&mut path.path_name);
-
-            (path_name, steps)
-        })
-        .unzip();
-
-    PathData {
-        segment_map,
-        path_names,
-        paths,
-    }
-}
-
 pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
     let ref_paths_list = args.ref_paths_vec.map(paths_list).unwrap_or_default();
 
@@ -155,7 +108,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
 
         info!("GFA has {} paths", gfa.paths.len());
 
-        gfa_path_data(gfa)
+        variants::gfa_path_data(gfa)
     };
 
     let mut ultrabubbles = if let Some(path) = &args.ultrabubbles_file {
@@ -190,7 +143,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         ultrabubbles.len()
     );
 
-    let p_bar = progress_bar(ultrabubbles.len());
+    let p_bar = progress_bar(ultrabubbles.len(), false);
 
     all_vcf_records.par_extend(
         ultrabubbles
@@ -199,9 +152,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
             .filter_map(|&(from, to)| {
                 let vars = variants::detect_variants_in_sub_paths(
                     &var_config,
-                    &path_data.segment_map,
-                    &path_data.path_names,
-                    &path_data.paths,
+                    &path_data,
                     ref_path_names.as_ref(),
                     &path_indices,
                     from,
@@ -262,8 +213,8 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
 
 #[allow(dead_code)]
 fn find_representative_paths(
-    ultrabubbles: &Vec<(u64, u64)>,
-    all_paths: &FnvHashMap<BString, Vec<(usize, usize, Orientation)>>,
+    ultrabubbles: &[(u64, u64)],
+    all_paths: &FnvHashMap<BString, Vec<PathStep>>,
 ) -> Vec<(BString, Vec<(u64, u64)>)> {
     let mut representative_paths = Vec::new();
 

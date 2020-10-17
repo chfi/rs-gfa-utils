@@ -904,18 +904,16 @@ checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 [[package]]
 name = "saboten"
 version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6ab825ed2dfde790fef5c7d3abecfa0f2ac9043638e05bbf3a0243fa3b38672"
 dependencies = [
  "bstr",
- "env_logger",
  "fnv",
  "gfa",
  "indicatif",
  "log",
  "petgraph",
- "pretty_env_logger",
  "rayon",
- "serde",
- "serde_json",
  "structopt",
  "three-edge-connected",
 ]
