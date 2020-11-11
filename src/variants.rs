@@ -140,14 +140,14 @@ pub fn bubble_path_indices(
     path_map
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariantKey {
     pub ref_name: BString,
     pub sequence: BString,
     pub pos: usize,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Variant {
     Del(BString),
     Ins(BString),
@@ -162,6 +162,113 @@ impl std::fmt::Display for Variant {
             Variant::Ins(b) => write!(f, "Ins({})", b),
             Variant::Snv(b) => write!(f, "Snv({})", char::from(*b)),
             Variant::Mnp(b) => write!(f, "Mnp({})", b),
+        }
+    }
+}
+
+/// Abstraction to handle the different cases in
+/// `detect_variants_against_ref_with`
+trait VariantHandler {
+    fn deletion(
+        &mut self,
+        ref_ix: usize,
+        query_ix: usize,
+        ref_seq_ix: usize,
+        query_seq_ix: usize,
+    );
+
+    fn insertion(
+        &mut self,
+        ref_ix: usize,
+        query_ix: usize,
+        ref_seq_ix: usize,
+        query_seq_ix: usize,
+    );
+
+    fn mismatch(
+        &mut self,
+        ref_ix: usize,
+        query_ix: usize,
+        ref_seq_ix: usize,
+        query_seq_ix: usize,
+    );
+
+    fn match_(
+        &mut self,
+        ref_ix: usize,
+        query_ix: usize,
+        ref_seq_ix: usize,
+        query_seq_ix: usize,
+    );
+}
+
+fn detect_variants_against_ref_with<H: VariantHandler>(
+    segment_sequences: &FnvHashMap<usize, BString>,
+    ref_path: &[(usize, usize, Orientation)],
+    query_path: &[(usize, usize, Orientation)],
+    handler: &mut H,
+) {
+    let mut ref_ix = 0;
+    let mut query_ix = 0;
+
+    let mut ref_seq_ix;
+    let mut query_seq_ix;
+
+    loop {
+        if ref_ix >= ref_path.len() || query_ix >= query_path.len() {
+            break;
+        }
+
+        let (ref_node, ref_offset, _) = ref_path[ref_ix];
+        let ref_seq = segment_sequences.get(&ref_node).unwrap();
+
+        ref_seq_ix = ref_offset;
+
+        let (query_node, query_offset, _) = query_path[query_ix];
+        let query_seq = segment_sequences.get(&query_node).unwrap();
+
+        query_seq_ix = query_offset;
+
+        if ref_node == query_node {
+            ref_ix += 1;
+            query_ix += 1;
+        } else {
+            if ref_ix + 1 >= ref_path.len() || query_ix + 1 >= query_path.len()
+            {
+                trace!("At end of ref or query");
+                break;
+            }
+            let (next_ref_node, _next_ref_offset, _) = ref_path[ref_ix + 1];
+            let (next_query_node, _next_query_offset, _) =
+                query_path[query_ix + 1];
+
+            if next_ref_node == query_node {
+                trace!("Deletion at ref {}\t query {}", ref_ix, query_ix);
+                // Deletion
+                handler.deletion(ref_ix, query_ix, ref_seq_ix, query_seq_ix);
+
+                ref_ix += 1;
+            } else if next_query_node == ref_node {
+                trace!("Insertion at ref {}\t query {}", ref_ix, query_ix);
+                // Insertion
+                handler.insertion(ref_ix, query_ix, ref_seq_ix, query_seq_ix);
+
+                query_ix += 1;
+            } else {
+                if ref_seq != query_seq {
+                    handler.mismatch(
+                        ref_ix,
+                        query_ix,
+                        ref_seq_ix,
+                        query_seq_ix,
+                    );
+                } else {
+                    handler.match_(ref_ix, query_ix, ref_seq_ix, query_seq_ix);
+                }
+
+                ref_ix += 1;
+                query_ix += 1;
+            }
         }
     }
 }
