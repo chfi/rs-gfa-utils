@@ -273,6 +273,176 @@ fn detect_variants_against_ref_with<H: VariantHandler>(
     }
 }
 
+/// Implementation of `VariantHandler` that fills a hashmap of
+/// variants, same as the original `detect_variants_against_ref`
+#[derive(Debug, Clone)]
+struct VCFVariantHandler<'a> {
+    segment_sequences: &'a FnvHashMap<usize, BString>,
+    ref_name: &'a [u8],
+    ref_path: &'a [(usize, usize, Orientation)],
+    query_path: &'a [(usize, usize, Orientation)],
+    variants: FnvHashMap<VariantKey, FnvHashSet<Variant>>,
+}
+
+impl<'a> VCFVariantHandler<'a> {
+    fn new(
+        segment_sequences: &'a FnvHashMap<usize, BString>,
+        ref_name: &'a [u8],
+        ref_path: &'a [(usize, usize, Orientation)],
+        query_path: &'a [(usize, usize, Orientation)],
+    ) -> Self {
+        Self {
+            segment_sequences,
+            ref_name,
+            ref_path,
+            query_path,
+            variants: FnvHashMap::default(),
+        }
+    }
+}
+
+impl<'a> VariantHandler for VCFVariantHandler<'a> {
+    fn deletion(
+        &mut self,
+        ref_ix: usize,
+        _query_ix: usize,
+        ref_seq_ix: usize,
+        _query_seq_ix: usize,
+    ) {
+        let (ref_node, _ref_offset, _) = self.ref_path[ref_ix];
+        let ref_seq = self.segment_sequences.get(&ref_node).unwrap();
+
+        // Deletion
+        let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
+            self.ref_path[ref_ix]
+        } else {
+            self.ref_path[ref_ix - 1]
+        };
+
+        let prev_ref_seq = self.segment_sequences.get(&prev_ref_node).unwrap();
+
+        let last_prev_seq: u8 = *prev_ref_seq.last().unwrap();
+
+        let key_ref_seq: BString = std::iter::once(last_prev_seq)
+            .chain(ref_seq.iter().copied())
+            .collect();
+
+        let var_key = VariantKey {
+            ref_name: self.ref_name.into(),
+            pos: ref_seq_ix - 1,
+            sequence: key_ref_seq,
+        };
+
+        let variant = Variant::Del(BString::from(&[last_prev_seq][..]));
+
+        let entry = self.variants.entry(var_key).or_default();
+        entry.insert(variant);
+    }
+
+    fn insertion(
+        &mut self,
+        ref_ix: usize,
+        query_ix: usize,
+        ref_seq_ix: usize,
+        _query_seq_ix: usize,
+    ) {
+        let (query_node, _query_offset, _) = self.query_path[query_ix];
+        let query_seq = self.segment_sequences.get(&query_node).unwrap();
+
+        let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
+            self.ref_path[ref_ix]
+        } else {
+            self.ref_path[ref_ix - 1]
+        };
+        let prev_ref_seq = self.segment_sequences.get(&prev_ref_node).unwrap();
+
+        let last_prev_seq: u8 = *prev_ref_seq.last().unwrap();
+
+        let key_ref_seq: BString = std::iter::once(last_prev_seq).collect();
+
+        let var_key = VariantKey {
+            ref_name: self.ref_name.into(),
+            pos: ref_seq_ix - 1,
+            sequence: key_ref_seq,
+        };
+
+        let var_seq: BString = std::iter::once(last_prev_seq)
+            .chain(query_seq.iter().copied())
+            .collect();
+        let variant = Variant::Ins(var_seq);
+
+        let entry = self.variants.entry(var_key).or_default();
+        entry.insert(variant);
+    }
+
+    fn mismatch(
+        &mut self,
+        ref_ix: usize,
+        query_ix: usize,
+        ref_seq_ix: usize,
+        _query_seq_ix: usize,
+    ) {
+        let (ref_node, _ref_offset, _) = self.ref_path[ref_ix];
+        let ref_seq = self.segment_sequences.get(&ref_node).unwrap();
+
+        let (query_node, _query_offset, _) = self.query_path[query_ix];
+        let query_seq = self.segment_sequences.get(&query_node).unwrap();
+
+        let var_key = VariantKey {
+            ref_name: self.ref_name.into(),
+            pos: ref_seq_ix,
+            sequence: ref_seq.as_bstr().to_owned(),
+        };
+
+        let variant = if ref_seq.len() == 1 {
+            trace!("SNV at ref {}\t query {}", ref_ix, query_ix);
+            let last_query_seq: u8 = *query_seq.last().unwrap();
+            Variant::Snv(last_query_seq)
+        } else {
+            trace!("MNP at ref {}\t query {}", ref_ix, query_ix);
+            Variant::Mnp(query_seq.as_bstr().to_owned())
+        };
+
+        let entry = self.variants.entry(var_key).or_default();
+        entry.insert(variant);
+    }
+
+    fn match_(
+        &mut self,
+        _ref_ix: usize,
+        _query_ix: usize,
+        _ref_seq_ix: usize,
+        _query_seq_ix: usize,
+    ) {
+    }
+}
+
+/// NB Should be equivalent to `detect_variants_against_ref` in
+/// function, but I need to test it, and I'm not sure about how
+/// performance may differ
+pub fn detect_variants_against_ref_(
+    segment_sequences: &FnvHashMap<usize, BString>,
+    ref_name: &[u8],
+    ref_path: &[(usize, usize, Orientation)],
+    query_path: &[(usize, usize, Orientation)],
+) -> FnvHashMap<VariantKey, FnvHashSet<Variant>> {
+    let mut handler = VCFVariantHandler::new(
+        segment_sequences,
+        ref_name,
+        ref_path,
+        query_path,
+    );
+
+    detect_variants_against_ref_with(
+        segment_sequences,
+        ref_path,
+        query_path,
+        &mut handler,
+    );
+
+    handler.variants
+}
+
 pub fn detect_variants_against_ref(
     segment_sequences: &FnvHashMap<usize, BString>,
     ref_name: &[u8],
