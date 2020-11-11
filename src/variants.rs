@@ -443,6 +443,73 @@ pub fn detect_variants_against_ref_(
     handler.variants
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SNPRow {
+    ref_pos: usize,
+    query_pos: usize,
+    ref_base: u8,
+    query_base: u8,
+}
+
+#[derive(Debug, Clone)]
+struct SNPVariantHandler<'a> {
+    segment_sequences: &'a FnvHashMap<usize, BString>,
+    ref_path: &'a [(usize, usize, Orientation)],
+    query_path: &'a [(usize, usize, Orientation)],
+    snp_rows: Vec<SNPRow>,
+}
+
+impl<'a> SNPVariantHandler<'a> {
+    fn new(
+        segment_sequences: &'a FnvHashMap<usize, BString>,
+        ref_path: &'a [(usize, usize, Orientation)],
+        query_path: &'a [(usize, usize, Orientation)],
+    ) -> Self {
+        Self {
+            segment_sequences,
+            ref_path,
+            query_path,
+            snp_rows: Vec::new(),
+        }
+    }
+}
+
+impl<'a> VariantHandler for SNPVariantHandler<'a> {
+    fn deletion(&mut self, _: usize, _: usize, _: usize, _: usize) {}
+    fn insertion(&mut self, _: usize, _: usize, _: usize, _: usize) {}
+
+    fn mismatch(
+        &mut self,
+        ref_ix: usize,
+        query_ix: usize,
+        ref_seq_ix: usize,
+        query_seq_ix: usize,
+    ) {
+        let (ref_node, _ref_offset, _) = self.ref_path[ref_ix];
+        let ref_seq = self.segment_sequences.get(&ref_node).unwrap();
+
+        let (query_node, _query_offset, _) = self.query_path[query_ix];
+        let query_seq = self.segment_sequences.get(&query_node).unwrap();
+
+        if ref_seq.len() == 1 && query_seq.len() == 1 {
+            let ref_base = ref_seq[0];
+            let query_base = query_seq[0];
+
+            let snp_row = SNPRow {
+                ref_pos: ref_seq_ix,
+                query_pos: query_seq_ix,
+                ref_base,
+                query_base,
+            };
+            self.snp_rows.push(snp_row);
+        } else {
+            debug!("TODO: SNPVariantHandler ignoring mismatch with ref and/or query nodes not being length 1");
+        }
+    }
+
+    fn match_(&mut self, _: usize, _: usize, _: usize, _: usize) {}
+}
+
 pub fn detect_variants_against_ref(
     segment_sequences: &FnvHashMap<usize, BString>,
     ref_name: &[u8],
@@ -611,21 +678,18 @@ impl Default for VariantConfig {
     }
 }
 
-pub fn detect_variants_in_sub_paths(
-    variant_config: &VariantConfig,
-    path_data: &PathData,
-    ref_path_names: Option<&FnvHashSet<BString>>,
-    path_indices: &FnvHashMap<u64, FnvHashMap<usize, usize>>,
+pub type PathIndices = FnvHashMap<u64, FnvHashMap<usize, usize>>;
+
+fn path_data_sub_paths<'a, 'b>(
+    path_data: &'a PathData,
+    path_indices: &'b PathIndices,
     from: u64,
     to: u64,
-) -> Option<FnvHashMap<BString, FnvHashMap<VariantKey, FnvHashSet<Variant>>>> {
+) -> Option<Vec<(usize, &'a [PathStep])>> {
     let from_indices = path_indices.get(&from)?;
     let to_indices = path_indices.get(&to)?;
 
-    let mut variants: FnvHashMap<BString, FnvHashMap<_, FnvHashSet<_>>> =
-        FnvHashMap::default();
-
-    let sub_paths: Vec<(usize, &[PathStep])> = path_data
+    let sub_paths = path_data
         .paths
         .iter()
         .enumerate()
@@ -642,6 +706,22 @@ pub fn detect_variants_in_sub_paths(
             }
         })
         .collect();
+
+    Some(sub_paths)
+}
+
+pub fn detect_variants_in_sub_paths(
+    variant_config: &VariantConfig,
+    path_data: &PathData,
+    ref_path_names: Option<&FnvHashSet<BString>>,
+    path_indices: &FnvHashMap<u64, FnvHashMap<usize, usize>>,
+    from: u64,
+    to: u64,
+) -> Option<FnvHashMap<BString, FnvHashMap<VariantKey, FnvHashSet<Variant>>>> {
+    let mut variants: FnvHashMap<BString, FnvHashMap<_, FnvHashSet<_>>> =
+        FnvHashMap::default();
+
+    let sub_paths = path_data_sub_paths(path_data, path_indices, from, to)?;
 
     let mut query_paths = sub_paths.clone();
 
@@ -694,6 +774,48 @@ pub fn detect_variants_in_sub_paths(
     }));
 
     Some(variants)
+}
+
+pub fn find_snps_in_sub_paths(
+    path_data: &PathData,
+    ref_path: usize,
+    path_indices: &PathIndices,
+    from: u64,
+    to: u64,
+) -> Option<FnvHashMap<BString, Vec<SNPRow>>> {
+    let mut query_snp_map: FnvHashMap<BString, Vec<SNPRow>> =
+        FnvHashMap::default();
+
+    let sub_paths = path_data_sub_paths(path_data, path_indices, from, to)?;
+
+    let _ref_name = path_data.path_names.get(ref_path)?;
+    let ref_sub_path = sub_paths.iter().find(|&(ix, _)| ix == &ref_path)?;
+    let ref_sub_path = ref_sub_path.1;
+
+    for (path_ix, query_path) in sub_paths.iter() {
+        if let Some(query_name) = path_data.path_names.get(*path_ix) {
+            let mut snp_handler = SNPVariantHandler::new(
+                &path_data.segment_map,
+                ref_sub_path,
+                query_path,
+            );
+
+            detect_variants_against_ref_with(
+                &path_data.segment_map,
+                ref_sub_path,
+                query_path,
+                &mut snp_handler,
+            );
+
+            let snp_rows = snp_handler.snp_rows;
+
+            let query_name: BString = query_name.clone();
+            let entry = query_snp_map.entry(query_name).or_default();
+            entry.extend(snp_rows);
+        }
+    }
+
+    Some(query_snp_map)
 }
 
 pub fn variant_vcf_record(
