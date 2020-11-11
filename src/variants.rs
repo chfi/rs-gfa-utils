@@ -504,6 +504,19 @@ impl<'a> VariantHandler for SNPVariantHandler<'a> {
             self.snp_rows.push(snp_row);
         } else {
             debug!("TODO: SNPVariantHandler ignoring mismatch with ref and/or query nodes not being length 1");
+
+            /*
+            let ref_base = ref_seq[0];
+            let query_base = query_seq[0];
+
+            let snp_row = SNPRow {
+                ref_pos: ref_seq_ix,
+                query_pos: query_seq_ix,
+                ref_base,
+                query_base,
+            };
+            self.snp_rows.push(snp_row);
+            */
         }
     }
 
@@ -778,7 +791,7 @@ pub fn detect_variants_in_sub_paths(
 
 pub fn find_snps_in_sub_paths(
     path_data: &PathData,
-    ref_path_name: &[u8],
+    ref_path_ix: usize,
     path_indices: &PathIndices,
     from: u64,
     to: u64,
@@ -788,10 +801,6 @@ pub fn find_snps_in_sub_paths(
 
     let sub_paths = path_data_sub_paths(path_data, path_indices, from, to)?;
 
-    let ref_path_ix = path_data
-        .path_names
-        .iter()
-        .position(|name| name == ref_path_name)?;
     let ref_sub_path = sub_paths.iter().find(|&(ix, _)| ix == &ref_path_ix)?;
     let ref_sub_path = ref_sub_path.1;
 

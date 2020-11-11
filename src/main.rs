@@ -5,8 +5,11 @@ use std::path::PathBuf;
 use gfautil::{
     commands,
     commands::{
-        convert_names::GfaIdConvertArgs, gaf2paf::GAF2PAFArgs,
-        gfa2vcf::GFA2VCFArgs, subgraph::SubgraphArgs, Result,
+        convert_names::GfaIdConvertArgs,
+        gaf2paf::GAF2PAFArgs,
+        gfa2vcf::{GFA2VCFArgs, SNPArgs},
+        subgraph::SubgraphArgs,
+        Result,
     },
 };
 
@@ -20,6 +23,8 @@ enum Command {
     GfaSegmentIdConversion(GfaIdConvertArgs),
     #[structopt(name = "gfa2vcf")]
     Gfa2Vcf(GFA2VCFArgs),
+    #[structopt(name = "snps")]
+    Snps(SNPArgs),
     #[structopt(name = "ultrabubbles")]
     Saboten,
 }
@@ -84,7 +89,9 @@ fn main() -> Result<()> {
         Command::Gfa2Vcf(args) => {
             commands::gfa2vcf::gfa2vcf(&opt.in_gfa, args)?;
         }
-
+        Command::Snps(args) => {
+            commands::gfa2vcf::gfa2snps(&opt.in_gfa, args)?;
+        }
         Command::Subgraph(args) => {
             commands::subgraph::subgraph(&opt.in_gfa, &args)?;
         }

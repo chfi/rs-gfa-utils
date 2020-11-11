@@ -271,10 +271,18 @@ pub fn gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
     let mut path_snp_rows: FnvHashMap<BString, Vec<SNPRow>> =
         FnvHashMap::default();
 
+    info!("Using reference path {}", ref_path_name);
+
+    let ref_path_ix = path_data
+        .path_names
+        .iter()
+        .position(|name| name == &ref_path_name)
+        .expect("Reference path does not exist in graph");
+
     for &(from, to) in ultrabubbles.iter().progress_with(p_bar) {
         let results = variants::find_snps_in_sub_paths(
             &path_data,
-            ref_path_name.as_slice(),
+            ref_path_ix,
             &path_indices,
             from,
             to,
@@ -288,35 +296,17 @@ pub fn gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
         }
     }
 
-    println!("path\treference pos\treference base\tquery pos\tquery base");
+    println!("path\treference base\treference pos\tquery base\tquery pos");
     for (name, snp_rows) in path_snp_rows.into_iter() {
         for snp in snp_rows.into_iter() {
             let ref_base = char::from(snp.ref_base);
             let query_base = char::from(snp.query_base);
             println!(
                 "{}\t{}\t{}\t{}\t{}",
-                &name, snp.ref_pos, ref_base, snp.query_pos, query_base
+                &name, ref_base, snp.ref_pos, query_base, snp.query_pos
             );
         }
     }
-
-    /*
-    path_snp_rows.extend(
-        ultrabubbles
-            .iter()
-            .progress_with(p_bar)
-            .filter_map(|&(from, to)| {
-                variants::find_snps_in_sub_paths(
-                    &path_data,
-                    ref_path_name.as_slice(),
-                    &path_indices,
-                    from,
-                    to,
-                )
-            })
-            .flatten(),
-    );
-    */
 
     Ok(())
 }
