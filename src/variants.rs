@@ -445,10 +445,10 @@ pub fn detect_variants_against_ref_(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SNPRow {
-    ref_pos: usize,
-    query_pos: usize,
-    ref_base: u8,
-    query_base: u8,
+    pub ref_pos: usize,
+    pub query_pos: usize,
+    pub ref_base: u8,
+    pub query_base: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -778,7 +778,7 @@ pub fn detect_variants_in_sub_paths(
 
 pub fn find_snps_in_sub_paths(
     path_data: &PathData,
-    ref_path: usize,
+    ref_path_name: &[u8],
     path_indices: &PathIndices,
     from: u64,
     to: u64,
@@ -788,8 +788,11 @@ pub fn find_snps_in_sub_paths(
 
     let sub_paths = path_data_sub_paths(path_data, path_indices, from, to)?;
 
-    let _ref_name = path_data.path_names.get(ref_path)?;
-    let ref_sub_path = sub_paths.iter().find(|&(ix, _)| ix == &ref_path)?;
+    let ref_path_ix = path_data
+        .path_names
+        .iter()
+        .position(|name| name == ref_path_name)?;
+    let ref_sub_path = sub_paths.iter().find(|&(ix, _)| ix == &ref_path_ix)?;
     let ref_sub_path = ref_sub_path.1;
 
     for (path_ix, query_path) in sub_paths.iter() {
