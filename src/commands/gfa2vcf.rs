@@ -1,22 +1,18 @@
 use bstr::{io::*, BString};
 use fnv::{FnvHashMap, FnvHashSet};
-use std::{fs::File, io::BufReader, path::PathBuf};
-use structopt::StructOpt;
-
 use indicatif::{
     ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle,
 };
 use rayon::prelude::*;
-
-use gfa::gfa::GFA;
+use std::{fs::File, io::BufReader, path::PathBuf};
+use structopt::StructOpt;
 
 #[allow(unused_imports)]
 use log::{debug, info, log_enabled, warn};
 
-use crate::{
-    variants,
-    variants::{PathStep, SNPRow},
-};
+use gfa::gfa::GFA;
+
+use crate::{util::progress_bar, variants, variants::PathStep};
 
 use super::{load_gfa, Result};
 
@@ -60,19 +56,6 @@ fn load_paths_file(file_path: PathBuf) -> Result<Vec<BString>> {
 
 fn paths_list(paths: Vec<String>) -> Vec<BString> {
     paths.into_iter().map(BString::from).collect()
-}
-
-fn progress_bar(len: usize, steady: bool) -> ProgressBar {
-    let p_bar = ProgressBar::new(len as u64);
-    p_bar.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
-            .progress_chars("##-"),
-    );
-    if steady {
-        p_bar.enable_steady_tick(1000);
-    }
-    p_bar
 }
 
 pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
@@ -212,103 +195,6 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
         // info!("\tfound {} variants", after_len - before_len);
     }
     */
-}
-
-/// Given a reference path from the GFA, by name, find and report the
-/// SNPs for all other paths compared to the reference. Uses the
-/// graph's ultrabubbles to identify areas of variation.
-#[derive(StructOpt, Debug)]
-pub struct SNPArgs {
-    /// Load ultrabubbles from a file instead of calculating them.
-    #[structopt(
-        name = "ultrabubbles file",
-        long = "ultrabubbles",
-        short = "ub"
-    )]
-    ultrabubbles_file: Option<PathBuf>,
-    /// The name of the path to be used as reference.
-    ref_path: String,
-}
-
-pub fn gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
-    let ref_path_name = BString::from(args.ref_path);
-
-    let path_data = {
-        let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
-
-        if gfa.paths.len() < 2 {
-            panic!("GFA must contain at least two paths");
-        }
-
-        info!("GFA has {} paths", gfa.paths.len());
-
-        variants::gfa_path_data(gfa)
-    };
-
-    let mut ultrabubbles = if let Some(path) = &args.ultrabubbles_file {
-        super::saboten::load_ultrabubbles(path)
-    } else {
-        super::saboten::find_ultrabubbles(gfa_path)
-    }?;
-
-    info!("Using {} ultrabubbles", ultrabubbles.len());
-
-    ultrabubbles.sort();
-
-    let ultrabubble_nodes = ultrabubbles
-        .iter()
-        .flat_map(|&(a, b)| {
-            use std::iter::once;
-            once(a).chain(once(b))
-        })
-        .collect::<FnvHashSet<_>>();
-
-    let path_indices =
-        variants::bubble_path_indices(&path_data.paths, &ultrabubble_nodes);
-
-    let p_bar = progress_bar(ultrabubbles.len(), false);
-
-    let mut path_snp_rows: FnvHashMap<BString, Vec<SNPRow>> =
-        FnvHashMap::default();
-
-    info!("Using reference path {}", ref_path_name);
-
-    let ref_path_ix = path_data
-        .path_names
-        .iter()
-        .position(|name| name == &ref_path_name)
-        .expect("Reference path does not exist in graph");
-
-    for &(from, to) in ultrabubbles.iter().progress_with(p_bar) {
-        let results = variants::find_snps_in_sub_paths(
-            &path_data,
-            ref_path_ix,
-            &path_indices,
-            from,
-            to,
-        );
-
-        if let Some(snp_results) = results {
-            for (name, snp_rows) in snp_results.into_iter() {
-                let entry = path_snp_rows.entry(name).or_default();
-                entry.extend(snp_rows);
-            }
-        }
-    }
-
-    println!("path\treference base\treference pos\tquery base\tquery pos");
-    for (name, snp_rows) in path_snp_rows.into_iter() {
-        for snp in snp_rows.into_iter() {
-            let ref_base = char::from(snp.ref_base);
-            let query_base = char::from(snp.query_base);
-            println!(
-                "{}\t{}\t{}\t{}\t{}",
-                &name, ref_base, snp.ref_pos, query_base, snp.query_pos
-            );
-        }
-    }
-
-    Ok(())
 }
 
 #[allow(dead_code)]

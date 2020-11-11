@@ -5,11 +5,8 @@ use std::path::PathBuf;
 use gfautil::{
     commands,
     commands::{
-        convert_names::GfaIdConvertArgs,
-        gaf2paf::GAF2PAFArgs,
-        gfa2vcf::{GFA2VCFArgs, SNPArgs},
-        subgraph::SubgraphArgs,
-        Result,
+        convert_names::GfaIdConvertArgs, gaf2paf::GAF2PAFArgs,
+        gfa2vcf::GFA2VCFArgs, snps::SNPArgs, subgraph::SubgraphArgs, Result,
     },
 };
 
@@ -90,7 +87,7 @@ fn main() -> Result<()> {
             commands::gfa2vcf::gfa2vcf(&opt.in_gfa, args)?;
         }
         Command::Snps(args) => {
-            commands::gfa2vcf::gfa2snps(&opt.in_gfa, args)?;
+            commands::snps::gfa2snps(&opt.in_gfa, args)?;
         }
         Command::Subgraph(args) => {
             commands::subgraph::subgraph(&opt.in_gfa, &args)?;

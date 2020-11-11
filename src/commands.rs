@@ -2,6 +2,7 @@ pub mod convert_names;
 pub mod gaf2paf;
 pub mod gfa2vcf;
 pub mod saboten;
+pub mod snps;
 pub mod stats;
 pub mod subgraph;
 

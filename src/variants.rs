@@ -5,23 +5,12 @@ use vcf::VCFRecord;
 use bio::alphabets::dna;
 use bstr::{BStr, BString, ByteSlice};
 use fnv::{FnvHashMap, FnvHashSet};
-use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 
 use gfa::gfa::{Orientation, GFA};
 
-fn progress_bar(len: usize, steady: bool) -> ProgressBar {
-    let p_bar = ProgressBar::new(len as u64);
-    p_bar.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:80} {pos:>7}/{len:7}")
-            .progress_chars("##-"),
-    );
-    if steady {
-        p_bar.enable_steady_tick(1000);
-    }
-    p_bar
-}
+use crate::util::progress_bar;
 
 #[allow(unused_imports)]
 use log::{debug, info, trace, warn};
