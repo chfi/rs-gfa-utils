@@ -23,43 +23,31 @@ The compiled binary will be located at `target/release/gfautil`.
 
 ```bash
 $ gfautil
-gfautil 0.3.0
+gfautil 0.3.1
 
 USAGE:
     gfautil [FLAGS] [OPTIONS] -i <input GFA file> <SUBCOMMAND>
 
 FLAGS:
-        --debug
-            Show debug messages
-
-    -h, --help
-            Prints help information
-
-        --info
-            Show info messages
-
-        --quiet
-            Show no messages
-
-    -V, --version
-            Prints version information
-
+        --debug      Show debug messages
+    -h, --help       Prints help information
+        --info       Show info messages
+        --quiet      Show no messages
+    -V, --version    Prints version information
 
 OPTIONS:
     -i <input GFA file>
-
-
-    -t, --threads <threads>
-            The number of threads to use when applicable. If omitted, Rayon's default will be used, based on the
-            RAYON_NUM_THREADS environment variable, or the number of logical CPUs
+    -t, --threads <threads>    The number of threads to use when applicable. If omitted, Rayon's default will be used,
+                               based on the RAYON_NUM_THREADS environment variable, or the number of logical CPUs
 
 SUBCOMMANDS:
     edge-count
     gaf2paf         Convert a file of GAF records into PAF records
-    gfa2vcf         Output a VCF for the given GFA, using the graph's ultrabubbles to identify areas of variation.
-                    (experimental!)
+    gfa2vcf         Output a VCF for the given GFA, using the graph's ultrabubbles to identify areas of variation
     help            Prints this message or the help of the given subcommand(s)
     id-convert      Convert a GFA with string names to one with integer names, and back
+    snps            Given a reference path from the GFA, by name, find and report the SNPs for all other paths
+                    compared to the reference. Uses the graph's ultrabubbles to identify areas of variation
     subgraph        Generate a subgraph of the input GFA
     ultrabubbles
 ```
@@ -114,6 +102,29 @@ Loading the list of ultrabubbles from a file:
 ```bash
 gfautil -i ./example.gfa gfa2vcf -u example.ultrabubbles
 ```
+
+## Identify SNPs in GFA against reference path
+
+Given the name of a path in the input GFA to use as reference, uses
+the GFA's ultrabubbles to identify SNPs among all other paths. Outputs
+a tab-delimited list in the format:
+
+```
+<query-path-name>\t<reference base>\t<reference pos>\t<query base>\t<query pos>
+```
+
+Just like the `gfa2vcf` command, you can also provide the ultrabubbles
+as a file using the `-u` option.
+
+```bash
+gfautil -i ./example.gfa snps --ref the_path
+```
+
+Loading the list of ultrabubbles from a file:
+```bash
+gfautil -i ./example.gfa snps --ref the_path -u example.bubbles
+```
+
 
 ## Subgraph
 
