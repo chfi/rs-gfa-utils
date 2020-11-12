@@ -2,7 +2,6 @@ pub mod vcf;
 
 use vcf::VCFRecord;
 
-use bio::alphabets::dna;
 use bstr::{BStr, BString, ByteSlice};
 use fnv::{FnvHashMap, FnvHashSet};
 use indicatif::ParallelProgressIterator;
@@ -14,18 +13,6 @@ use crate::util::progress_bar;
 
 #[allow(unused_imports)]
 use log::{debug, info, trace, warn};
-
-pub fn oriented_sequence<T: AsRef<[u8]>>(
-    seq: T,
-    orient: Orientation,
-) -> BString {
-    let seq: &[u8] = seq.as_ref();
-    if orient.is_reverse() {
-        dna::revcomp(seq).into()
-    } else {
-        seq.into()
-    }
-}
 
 pub type PathStep = (usize, usize, Orientation);
 

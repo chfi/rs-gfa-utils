@@ -442,7 +442,6 @@ dependencies = [
 name = "gfautil"
 version = "0.3.0"
 dependencies = [
- "bio",
  "bstr",
  "chrono",
  "clap",
@@ -451,12 +450,10 @@ dependencies = [
  "gfa",
  "handlegraph",
  "indicatif",
- "itertools",
  "log",
  "pretty_env_logger",
  "rayon",
  "saboten",
- "serde",
  "structopt",
 ]
 
