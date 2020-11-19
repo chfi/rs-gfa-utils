@@ -23,7 +23,7 @@ The compiled binary will be located at `target/release/gfautil`.
 
 ```bash
 $ gfautil
-gfautil 0.3.1
+gfautil 0.3.2
 
 USAGE:
     gfautil [FLAGS] [OPTIONS] -i <input GFA file> <SUBCOMMAND>
@@ -47,7 +47,7 @@ SUBCOMMANDS:
     help            Prints this message or the help of the given subcommand(s)
     id-convert      Convert a GFA with string names to one with integer names, and back
     snps            Given a reference path from the GFA, by name, find and report the SNPs for all other paths
-                    compared to the reference. Uses the graph's ultrabubbles to identify areas of variation
+                    compared to the reference.
     subgraph        Generate a subgraph of the input GFA
     ultrabubbles
 ```
@@ -105,22 +105,30 @@ gfautil -i ./example.gfa gfa2vcf -u example.ultrabubbles
 
 ## Identify SNPs in GFA against reference path
 
-Given the name of a path in the input GFA to use as reference, uses
-the GFA's ultrabubbles to identify SNPs among all other paths. Outputs
-a tab-delimited list in the format:
+Given the name of a path in the input GFA to use as reference,
+identify SNPs among all other paths, using either a list of
+ultrabubbles constructed using the `gfautil ultrabubbles` command, or
+a list of SNP positions.
+
+Outputs a tab-delimited list in the format:
 
 ```
 <query-path-name>\t<reference base>\t<reference pos>\t<query base>\t<query pos>
 ```
 
-Just like the `gfa2vcf` command, you can also provide the ultrabubbles
-as a file using the `-u` option.
+SNP positions can be provided as a list in the arguments to `gfautil`:
 
 ```bash
-gfautil -i ./example.gfa snps --ref the_path
+gfautil --debug -t 8 -i ./example.gfa snps --ref "reference path name" --snps 1234 5677 1> example.gfa.snps
 ```
 
-Loading the list of ultrabubbles from a file:
+SNP positions can also be provided as a file, with one position per line:
+
+```bash
+gfautil --debug -t 8 -i ./example.gfa snps --ref "reference path name" --snps-file ./positions.txt 1> example.gfa.snps
+```
+
+Using ultrabubbles from a file:
 ```bash
 gfautil -i ./example.gfa snps --ref the_path -u example.bubbles
 ```

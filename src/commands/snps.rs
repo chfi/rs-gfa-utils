@@ -19,8 +19,7 @@ use crate::{
 use super::{load_gfa, Result};
 
 /// Given a reference path from the GFA, by name, find and report the
-/// SNPs for all other paths compared to the reference. Uses the
-/// graph's ultrabubbles to identify areas of variation.
+/// SNPs for all other paths compared to the reference.
 #[derive(StructOpt, Debug)]
 pub struct SNPArgs {
     #[structopt(name = "name of reference path", long = "ref", short = "r")]
@@ -130,7 +129,7 @@ pub fn gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
         variants::gfa_path_data(gfa)
     };
 
-    info!("Using reference path {}", ref_path_name);
+    info!("Using reference path: {}", ref_path_name);
 
     let ref_path_ix = path_data
         .path_names
@@ -149,6 +148,13 @@ pub fn gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
     }?;
 
     info!("Found ultrabubbles for {} SNPs", ultrabubbles.len());
+
+    if log_enabled!(log::Level::Debug) {
+        debug!("Bubbles:");
+        for &(from, to) in ultrabubbles.iter() {
+            debug!("{}\t{}", from, to);
+        }
+    }
 
     let ultrabubble_nodes = ultrabubbles
         .iter()
