@@ -10,7 +10,11 @@ use gfa::gfa::GFA;
 #[allow(unused_imports)]
 use log::{debug, info, log_enabled, warn};
 
-use crate::{util::progress_bar, variants, variants::SNPRow};
+use crate::{
+    util::progress_bar,
+    variants,
+    variants::{PathData, PathStep, SNPRow},
+};
 
 use super::{load_gfa, Result};
 
@@ -31,7 +35,64 @@ pub struct SNPArgs {
     ref_path: String,
 }
 
+fn build_snp_reference_bubbles(
+    path: &[PathStep],
+    positions: &mut [usize],
+) -> Vec<(usize, usize)> {
+    positions.sort();
+
+    let mut res = Vec::with_capacity(positions.len());
+
+    let mut steps_iter = path.iter();
+
+    for &snp_pos in positions.iter() {
+        if let Some(&(node, pos, _)) =
+            steps_iter.find(|(_, pos, _)| *pos == snp_pos)
+        {
+            res.push((node, pos));
+        }
+    }
+
+    res.shrink_to_fit();
+    res
+}
+
 pub fn gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
+    let ref_path_name = BString::from(args.ref_path);
+
+    let mut snps = vec![3037usize, 14408, 19724, 23403, 26258, 29573];
+
+    let path_data = {
+        let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
+
+        if gfa.paths.len() < 2 {
+            panic!("GFA must contain at least two paths");
+        }
+
+        info!("GFA has {} paths", gfa.paths.len());
+
+        variants::gfa_path_data(gfa)
+    };
+
+    let path_ix = path_data
+        .path_names
+        .iter()
+        .position(|name| name == &ref_path_name)
+        .unwrap();
+
+    let path = &path_data.paths[path_ix];
+
+    let snp_nodes = build_snp_reference_bubbles(path, &mut snps);
+
+    println!("{:5}  {:5}", "Pos", "Node");
+    for (node, pos) in snp_nodes {
+        println!("{:5}  {:5}", pos, node);
+    }
+
+    Ok(())
+}
+
+pub fn _gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
     let ref_path_name = BString::from(args.ref_path);
 
     let path_data = {
