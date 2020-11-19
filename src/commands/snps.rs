@@ -35,21 +35,35 @@ pub struct SNPArgs {
     ref_path: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct SNPBubble {
+    snp_pos: usize,
+    from: usize,
+    to: usize,
+}
+
 fn build_snp_reference_bubbles(
     path: &[PathStep],
     positions: &mut [usize],
-) -> Vec<(usize, usize)> {
-    positions.sort();
-
+) -> Vec<SNPBubble> {
     let mut res = Vec::with_capacity(positions.len());
 
-    let mut steps_iter = path.iter();
+    positions.sort();
+    let mut steps_iter = path.iter().enumerate();
 
     for &snp_pos in positions.iter() {
-        if let Some(&(node, pos, _)) =
-            steps_iter.find(|(_, pos, _)| *pos == snp_pos)
+        if let Some((ix, &(_node, pos, _))) =
+            steps_iter.find(|(_, (_, pos, _))| *pos == snp_pos)
         {
-            res.push((node, pos));
+            if ix > 0 && ix < path.len() {
+                let (prev, _, _) = path[ix - 1];
+                let (next, _, _) = path[ix + 1];
+                res.push(SNPBubble {
+                    snp_pos: pos,
+                    from: prev,
+                    to: next,
+                });
+            }
         }
     }
 
@@ -60,7 +74,8 @@ fn build_snp_reference_bubbles(
 pub fn gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
     let ref_path_name = BString::from(args.ref_path);
 
-    let mut snps = vec![3037usize, 14408, 19724, 23403, 26258, 29573];
+    let mut snps =
+        vec![3037usize, 14408, 19724, 22879, 23403, 24388, 26258, 29573];
 
     let path_data = {
         let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
@@ -84,9 +99,12 @@ pub fn gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
 
     let snp_nodes = build_snp_reference_bubbles(path, &mut snps);
 
-    println!("{:5}  {:5}", "Pos", "Node");
-    for (node, pos) in snp_nodes {
-        println!("{:5}  {:5}", pos, node);
+    println!("{:5} - ({:5}, {:5})", "Pos", "Prev", "Next");
+    for bubble in snp_nodes {
+        let pos = bubble.snp_pos;
+        let next = bubble.from;
+        let prev = bubble.to;
+        println!("{:5} - ({:5}, {:5})", pos, prev, next);
     }
 
     Ok(())
