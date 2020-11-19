@@ -13,7 +13,7 @@ use log::{debug, info, log_enabled, warn};
 use crate::{
     util::progress_bar,
     variants,
-    variants::{PathData, PathStep, SNPRow},
+    variants::{PathStep, SNPRow},
 };
 
 use super::{load_gfa, Result};
@@ -23,46 +23,90 @@ use super::{load_gfa, Result};
 /// graph's ultrabubbles to identify areas of variation.
 #[derive(StructOpt, Debug)]
 pub struct SNPArgs {
-    /// Load ultrabubbles from a file instead of calculating them.
-    #[structopt(
-        name = "ultrabubbles file",
-        long = "ultrabubbles",
-        short = "u"
-    )]
-    ultrabubbles_file: Option<PathBuf>,
     #[structopt(name = "name of reference path", long = "ref", short = "r")]
     /// The name of the path to be used as reference.
     ref_path: String,
+    /// A list of SNP positions to use.
+    #[structopt(
+        name = "SNP positions",
+        long = "snps",
+        required_unless_one(&["SNP positions file", "ultrabubbles file"])
+    )]
+    snp_positions: Option<Vec<usize>>,
+    /// Path to a file containing SNP positions to use, one position
+    /// per line.
+    #[structopt(
+        name = "SNP positions file",
+        long = "snps-file",
+        required_unless_one(&["SNP positions", "ultrabubbles file"])
+    )]
+    snp_positions_file: Option<PathBuf>,
+    /// Path to a file containing bubbles to use, if not providing SNP
+    /// positions.
+    #[structopt(
+        name = "ultrabubbles file",
+        long = "ultrabubbles",
+        short = "u",
+        required_unless_one(&["SNP positions", "SNP positions file"])
+    )]
+    ultrabubbles_file: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct SNPBubble {
-    snp_pos: usize,
-    from: usize,
-    to: usize,
+fn snp_positions(args: &SNPArgs) -> Result<Vec<usize>> {
+    let mut res = Vec::new();
+
+    if let Some(positions) = args.snp_positions.as_ref() {
+        res.extend(positions.iter().copied());
+    }
+
+    if let Some(file_path) = args.snp_positions_file.as_ref() {
+        let positions = load_snp_positions_file(file_path)?;
+        res.extend(positions);
+    }
+
+    if res.is_empty() {
+        panic!("No SNPs were provided");
+    }
+
+    Ok(res)
+}
+
+fn load_snp_positions_file(file_path: &PathBuf) -> Result<Vec<usize>> {
+    use bstr::{io::*, ByteSlice};
+    use std::{fs::File, io::BufReader};
+
+    let mut res = Vec::new();
+
+    let file = File::open(file_path)?;
+    let reader = BufReader::new(file);
+
+    for line in reader.byte_lines() {
+        let line = line?;
+        let line = line.trim().to_str()?;
+        let pos = line.parse::<usize>()?;
+        res.push(pos);
+    }
+
+    Ok(res)
 }
 
 fn build_snp_reference_bubbles(
     path: &[PathStep],
     positions: &mut [usize],
-) -> Vec<SNPBubble> {
+) -> Vec<(u64, u64)> {
     let mut res = Vec::with_capacity(positions.len());
 
     positions.sort();
     let mut steps_iter = path.iter().enumerate();
 
     for &snp_pos in positions.iter() {
-        if let Some((ix, &(_node, pos, _))) =
+        if let Some((ix, _)) =
             steps_iter.find(|(_, (_, pos, _))| *pos == snp_pos)
         {
             if ix > 0 && ix < path.len() {
                 let (prev, _, _) = path[ix - 1];
                 let (next, _, _) = path[ix + 1];
-                res.push(SNPBubble {
-                    snp_pos: pos,
-                    from: prev,
-                    to: next,
-                });
+                res.push((prev as u64, next as u64));
             }
         }
     }
@@ -72,10 +116,7 @@ fn build_snp_reference_bubbles(
 }
 
 pub fn gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
-    let ref_path_name = BString::from(args.ref_path);
-
-    let mut snps =
-        vec![3037usize, 14408, 19724, 22879, 23403, 24388, 26258, 29573];
+    let ref_path_name: BString = BString::from(args.ref_path.as_str());
 
     let path_data = {
         let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
@@ -89,51 +130,25 @@ pub fn gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
         variants::gfa_path_data(gfa)
     };
 
-    let path_ix = path_data
+    info!("Using reference path {}", ref_path_name);
+
+    let ref_path_ix = path_data
         .path_names
         .iter()
         .position(|name| name == &ref_path_name)
-        .unwrap();
+        .expect("Reference path does not exist in graph");
 
-    let path = &path_data.paths[path_ix];
+    let ref_path = &path_data.paths[ref_path_ix];
 
-    let snp_nodes = build_snp_reference_bubbles(path, &mut snps);
-
-    println!("{:5} - ({:5}, {:5})", "Pos", "Prev", "Next");
-    for bubble in snp_nodes {
-        let pos = bubble.snp_pos;
-        let next = bubble.from;
-        let prev = bubble.to;
-        println!("{:5} - ({:5}, {:5})", pos, prev, next);
-    }
-
-    Ok(())
-}
-
-pub fn _gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
-    let ref_path_name = BString::from(args.ref_path);
-
-    let path_data = {
-        let gfa: GFA<usize, ()> = load_gfa(&gfa_path)?;
-
-        if gfa.paths.len() < 2 {
-            panic!("GFA must contain at least two paths");
-        }
-
-        info!("GFA has {} paths", gfa.paths.len());
-
-        variants::gfa_path_data(gfa)
-    };
-
-    let mut ultrabubbles = if let Some(path) = &args.ultrabubbles_file {
+    let ultrabubbles = if let Ok(mut positions) = snp_positions(&args) {
+        Ok(build_snp_reference_bubbles(&ref_path, &mut positions))
+    } else if let Some(path) = &args.ultrabubbles_file {
         super::saboten::load_ultrabubbles(path)
     } else {
-        super::saboten::find_ultrabubbles(gfa_path)
+        unreachable!()
     }?;
 
-    info!("Using {} ultrabubbles", ultrabubbles.len());
-
-    ultrabubbles.sort();
+    info!("Found ultrabubbles for {} SNPs", ultrabubbles.len());
 
     let ultrabubble_nodes = ultrabubbles
         .iter()
@@ -150,14 +165,6 @@ pub fn _gfa2snps(gfa_path: &PathBuf, args: SNPArgs) -> Result<()> {
 
     let mut path_snp_rows: FnvHashMap<BString, Vec<SNPRow>> =
         FnvHashMap::default();
-
-    info!("Using reference path {}", ref_path_name);
-
-    let ref_path_ix = path_data
-        .path_names
-        .iter()
-        .position(|name| name == &ref_path_name)
-        .expect("Reference path does not exist in graph");
 
     for &(from, to) in ultrabubbles.iter().progress_with(p_bar) {
         let results = variants::find_snps_in_sub_paths(
