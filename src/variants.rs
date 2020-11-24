@@ -688,7 +688,7 @@ fn path_data_sub_paths<'a, 'b>(
             let from = from_ix.min(to_ix);
             let to = from_ix.max(to_ix);
             let sub_path = &path[from..=to];
-            if sub_path.len() > 2 {
+            if sub_path.len() > 1 {
                 Some((path_ix, sub_path))
             } else {
                 None
