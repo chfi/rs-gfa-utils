@@ -13,6 +13,7 @@ use crate::util::progress_bar;
 
 #[allow(unused_imports)]
 use log::{debug, info, trace, warn};
+use gfa::gfa::Orientation::Forward;
 
 pub type PathStep = (usize, usize, Orientation);
 
@@ -529,16 +530,10 @@ pub fn detect_variants_against_ref(
             ref_ix += 1;
             query_ix += 1;
         } else {
-            if ref_ix + 1 >= ref_path.len() || query_ix + 1 >= query_path.len()
-            {
-                trace!("At end of ref or query");
-                break;
-            }
-            let (next_ref_node, _next_ref_offset, _) = ref_path[ref_ix + 1];
-            let (next_query_node, _next_query_offset, _) =
-                query_path[query_ix + 1];
+            let (next_ref_node, _next_ref_offset, _) = if ref_ix + 1 < ref_path.len() { ref_path[ref_ix + 1] } else { (0, 0, Forward) };
+            let (next_query_node, _next_query_offset, _) = if query_ix + 1 < query_path.len() { query_path[query_ix + 1] } else { (0, 0, Forward) };
 
-            if next_ref_node == query_node {
+            if ref_ix + 1 < ref_path.len() && next_ref_node == query_node {
                 trace!("Deletion at ref {}\t query {}", ref_ix, query_ix);
                 // Deletion
                 let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
@@ -568,7 +563,7 @@ pub fn detect_variants_against_ref(
                 entry.insert(variant);
 
                 ref_ix += 1;
-            } else if next_query_node == ref_node {
+            } else if query_ix + 1 < query_path.len() && next_query_node == ref_node {
                 trace!("Insertion at ref {}\t query {}", ref_ix, query_ix);
                 // Insertion
 
@@ -601,6 +596,12 @@ pub fn detect_variants_against_ref(
 
                 query_ix += 1;
             } else {
+                if ref_ix + 1 >= ref_path.len() || query_ix + 1 >= query_path.len()
+                {
+                    trace!("At end of ref or query");
+                    break;
+                }
+
                 if ref_seq != query_seq {
                     let var_key = VariantKey {
                         ref_name: ref_name.into(),
@@ -688,7 +689,7 @@ fn path_data_sub_paths<'a, 'b>(
             let from = from_ix.min(to_ix);
             let to = from_ix.max(to_ix);
             let sub_path = &path[from..=to];
-            if sub_path.len() > 2 {
+            if sub_path.len() > 1 {
                 Some((path_ix, sub_path))
             } else {
                 None
