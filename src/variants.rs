@@ -130,6 +130,7 @@ pub enum Variant {
     Ins(BString),
     Snv(u8),
     Mnp(BString),
+    Clumped(BString),
 }
 
 impl std::fmt::Display for Variant {
@@ -139,6 +140,7 @@ impl std::fmt::Display for Variant {
             Variant::Ins(b) => write!(f, "Ins({})", b),
             Variant::Snv(b) => write!(f, "Snv({})", char::from(*b)),
             Variant::Mnp(b) => write!(f, "Mnp({})", b),
+            Variant::Clumped(b) => write!(f, "Clumped({})", b),
         }
     }
 }
@@ -825,6 +827,7 @@ pub fn variant_vcf_record(
                         (base_seq, "snv".into())
                     }
                     Variant::Mnp(seq) => (seq.clone(), "mnp".into()),
+                    Variant::Clumped(seq) => (seq.clone(), "clumped".into()),
                 })
                 .unzip();
 
