@@ -652,7 +652,7 @@ pub fn detect_variants_against_ref(
                             sequence: key_ref_seq,
                         };
 
-                        if ref_seq.len() < query_seq.len() {
+                        if ref_seq.len() > query_seq.len() {
                             trace!("Deletion at ref {}\t query {}", ref_ix, query_ix);
 
                             Variant::Del(BString::from(&[last_prev_seq][..]))
