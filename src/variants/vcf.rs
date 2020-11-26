@@ -77,7 +77,7 @@ impl Display for VCFHeader {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let date: DateTime<Utc> = Utc::now();
 
-        writeln!(f, "##fileFormat=VCFv4.2")?;
+        writeln!(f, "##fileformat=VCFv4.2")?;
         writeln!(f, "##fileDate={}", date.format("%Y%m%d"))?;
         writeln!(f, "##reference={}", self.reference.display())?;
 
