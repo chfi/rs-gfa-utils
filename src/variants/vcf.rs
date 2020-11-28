@@ -83,7 +83,7 @@ impl Display for VCFHeader {
 
         writeln!(
             f,
-            r#"##INFO=<ID=TYPE,Number=A,Type=String,Description="Type of each allele (snv, ins, del, mnp, complex)">"#
+            r#"##INFO=<ID=TYPE,Number=A,Type=String,Description="Type of each allele (snv, ins, del, mnp, clumped)">"#
         )?;
 
         // writeln!(

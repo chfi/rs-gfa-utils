@@ -644,26 +644,29 @@ pub fn detect_variants_against_ref(
 
                         let prev_ref_seq = segment_sequences.get(&prev_ref_node).unwrap();
                         let last_prev_seq: u8 = *prev_ref_seq.last().unwrap();
-                        let key_ref_seq: BString = std::iter::once(last_prev_seq).collect();
+
+                        let ref_seq_vcf: BString = std::iter::once(last_prev_seq)
+                            .chain(ref_seq.iter().copied())
+                            .collect();
 
                         var_key = VariantKey {
                             ref_name: ref_name.into(),
                             pos: ref_seq_ix - 1,
-                            sequence: key_ref_seq,
+                            sequence: ref_seq_vcf,
                         };
+
+                        let alt_seq_vcf: BString = std::iter::once(last_prev_seq)
+                            .chain(query_seq.iter().copied())
+                            .collect();
 
                         if ref_seq.len() > query_seq.len() {
                             trace!("Deletion at ref {}\t query {}", ref_ix, query_ix);
 
-                            Variant::Del(BString::from(&[last_prev_seq][..]))
+                            Variant::Del(alt_seq_vcf)
                         } else {
                             trace!("Insertion at ref {}\t query {}", ref_ix, query_ix);
 
-                            let var_seq: BString = std::iter::once(last_prev_seq)
-                                .chain(query_seq.iter().copied())
-                                .collect();
-
-                            Variant::Ins(var_seq)
+                            Variant::Ins(alt_seq_vcf)
                         }
                     };
 
