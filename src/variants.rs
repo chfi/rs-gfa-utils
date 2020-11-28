@@ -804,7 +804,9 @@ pub fn detect_variants_in_sub_paths(
                     query_path,
                 );
 
-                ref_map.extend(vars)
+                for (var_key, var_set) in vars {
+                    ref_map.entry(var_key).or_default().extend(var_set);
+                }
             }
         }
 
