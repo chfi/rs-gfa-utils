@@ -1,6 +1,6 @@
 [package]
 name = "gfautil"
-version = "0.3.2"
+version = "0.4.0-alpha"
 authors = ["christian <christian@chfi.se>"]
 description = "Command line tools for working with GFA files and related formats."
 edition = "2018"
@@ -27,8 +27,7 @@ indicatif = { version = "0.15", features = ["rayon"] }
 
 gfa = { version = "0.10", features = ["serde1"] }
 handlegraph = "0.7.0-alpha.2"
-# saboten = { version = "0.1.0", features = ["progress_bars"] }
-saboten = { path = "../saboten" }
+saboten = { version = "0.1.1", features = ["progress_bars"] }
 
 
 [[bin]]

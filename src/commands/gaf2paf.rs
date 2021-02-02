@@ -1,4 +1,3 @@
-use bstr::BString;
 use std::{fs::File, io::Write, path::PathBuf};
 use structopt::StructOpt;
 

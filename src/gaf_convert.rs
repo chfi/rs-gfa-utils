@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, fs::File, io::BufReader, path::Path};
 
-use bstr::{io::*, BString, ByteSlice};
+use bstr::{io::*, ByteSlice};
 
 use gfa::{
     cigar::{CIGAROp, CIGAR},

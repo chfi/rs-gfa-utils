@@ -3,8 +3,6 @@ use gfa::optfields::OptFields;
 
 use std::collections::HashSet;
 
-use bstr::BString;
-
 macro_rules! filtered {
     ($coll:expr, $pred:expr) => {
         $coll.iter().filter($pred).cloned().collect();

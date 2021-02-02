@@ -1,7 +1,7 @@
 use clap::arg_enum;
 use structopt::{clap::ArgGroup, StructOpt};
 
-use bstr::{BString, ByteSlice, ByteVec};
+use bstr::{ByteSlice, ByteVec};
 use std::{fs::File, path::PathBuf};
 
 use gfa::{gfa::GFA, optfields::OptionalFields, writer::gfa_string};
