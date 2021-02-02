@@ -1,6 +1,6 @@
 [package]
 name = "gfautil"
-version = "0.4.0-alpha"
+version = "0.4.0-alpha.1"
 authors = ["christian <christian@chfi.se>"]
 description = "Command line tools for working with GFA files and related formats."
 edition = "2018"
