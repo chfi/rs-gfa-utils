@@ -130,6 +130,7 @@ pub enum Variant {
     Ins(BString),
     Snv(u8),
     Mnp(BString),
+    Clumped(BString),
 }
 
 impl std::fmt::Display for Variant {
@@ -139,6 +140,7 @@ impl std::fmt::Display for Variant {
             Variant::Ins(b) => write!(f, "Ins({})", b),
             Variant::Snv(b) => write!(f, "Snv({})", char::from(*b)),
             Variant::Mnp(b) => write!(f, "Mnp({})", b),
+            Variant::Clumped(b) => write!(f, "Clumped({})", b),
         }
     }
 }
@@ -530,20 +532,23 @@ pub fn detect_variants_against_ref(
             ref_ix += 1;
             query_ix += 1;
         } else {
+            let ref_path_len = ref_path.len();
+            let query_path_len = query_path.len();
+
             let (next_ref_node, _next_ref_offset, _) =
-                if ref_ix + 1 < ref_path.len() {
+                if ref_ix + 1 < ref_path_len {
                     ref_path[ref_ix + 1]
                 } else {
                     (0, 0, Forward)
                 };
             let (next_query_node, _next_query_offset, _) =
-                if query_ix + 1 < query_path.len() {
+                if query_ix + 1 < query_path_len {
                     query_path[query_ix + 1]
                 } else {
                     (0, 0, Forward)
                 };
 
-            if ref_ix + 1 < ref_path.len() && next_ref_node == query_node {
+            if ref_ix + 1 < ref_path_len && next_ref_node == query_node {
                 trace!("Deletion at ref {}\t query {}", ref_ix, query_ix);
                 // Deletion
                 let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
@@ -573,7 +578,7 @@ pub fn detect_variants_against_ref(
                 entry.insert(variant);
 
                 ref_ix += 1;
-            } else if query_ix + 1 < query_path.len()
+            } else if query_ix + 1 < query_path_len
                 && next_query_node == ref_node
             {
                 trace!("Insertion at ref {}\t query {}", ref_ix, query_ix);
@@ -608,27 +613,104 @@ pub fn detect_variants_against_ref(
 
                 query_ix += 1;
             } else {
-                if ref_ix + 1 >= ref_path.len()
-                    || query_ix + 1 >= query_path.len()
+                if ref_ix + 1 >= ref_path_len || query_ix + 1 >= query_path_len
                 {
                     trace!("At end of ref or query");
                     break;
                 }
 
                 if ref_seq != query_seq {
-                    let var_key = VariantKey {
+                    let mut var_key = VariantKey {
                         ref_name: ref_name.into(),
                         pos: ref_seq_ix,
                         sequence: ref_seq.as_bstr().to_owned(),
                     };
 
-                    let variant = if ref_seq.len() == 1 {
-                        trace!("SNV at ref {}\t query {}", ref_ix, query_ix);
-                        let last_query_seq: u8 = *query_seq.last().unwrap();
-                        Variant::Snv(last_query_seq)
+                    let variant = if ref_seq.len() == query_seq.len() {
+                        if ref_seq.len() == 1 {
+                            trace!(
+                                "SNV at ref {}\t query {}",
+                                ref_ix,
+                                query_ix
+                            );
+
+                            let last_query_seq: u8 = *query_seq.last().unwrap();
+                            Variant::Snv(last_query_seq)
+                        } else {
+                            let num_differences = ref_seq
+                                .iter()
+                                .zip(query_seq.iter())
+                                .fold(0, |count, (r, q)| {
+                                    if r != q {
+                                        count + 1
+                                    } else {
+                                        count
+                                    }
+                                });
+
+                            if num_differences == ref_seq.len() {
+                                trace!(
+                                    "MNP at ref {}\t query {}",
+                                    ref_ix,
+                                    query_ix
+                                );
+
+                                Variant::Mnp(query_seq.as_bstr().to_owned())
+                            } else {
+                                trace!(
+                                    "CLUMPED at ref {}\t query {}",
+                                    ref_ix,
+                                    query_ix
+                                );
+
+                                Variant::Clumped(query_seq.as_bstr().to_owned())
+                            }
+                        }
                     } else {
-                        trace!("MNP at ref {}\t query {}", ref_ix, query_ix);
-                        Variant::Mnp(query_seq.as_bstr().to_owned())
+                        let (prev_ref_node, _prev_ref_offset, _) =
+                            if ref_ix == 0 {
+                                ref_path[ref_ix]
+                            } else {
+                                ref_path[ref_ix - 1]
+                            };
+
+                        let prev_ref_seq =
+                            segment_sequences.get(&prev_ref_node).unwrap();
+                        let last_prev_seq: u8 = *prev_ref_seq.last().unwrap();
+
+                        let ref_seq_vcf: BString =
+                            std::iter::once(last_prev_seq)
+                                .chain(ref_seq.iter().copied())
+                                .collect();
+
+                        var_key = VariantKey {
+                            ref_name: ref_name.into(),
+                            pos: ref_seq_ix - 1,
+                            sequence: ref_seq_vcf,
+                        };
+
+                        let alt_seq_vcf: BString =
+                            std::iter::once(last_prev_seq)
+                                .chain(query_seq.iter().copied())
+                                .collect();
+
+                        if ref_seq.len() > query_seq.len() {
+                            trace!(
+                                "Deletion at ref {}\t query {}",
+                                ref_ix,
+                                query_ix
+                            );
+
+                            Variant::Del(alt_seq_vcf)
+                        } else {
+                            trace!(
+                                "Insertion at ref {}\t query {}",
+                                ref_ix,
+                                query_ix
+                            );
+
+                            Variant::Ins(alt_seq_vcf)
+                        }
                     };
 
                     let entry = variants.entry(var_key).or_default();
@@ -768,7 +850,9 @@ pub fn detect_variants_in_sub_paths(
                     query_path,
                 );
 
-                ref_map.extend(vars)
+                for (var_key, var_set) in vars {
+                    ref_map.entry(var_key).or_default().extend(var_set);
+                }
             }
         }
 
@@ -838,6 +922,7 @@ pub fn variant_vcf_record(
                         (base_seq, "snv".into())
                     }
                     Variant::Mnp(seq) => (seq.clone(), "mnp".into()),
+                    Variant::Clumped(seq) => (seq.clone(), "clumped".into()),
                 })
                 .unzip();
 

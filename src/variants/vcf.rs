@@ -77,13 +77,13 @@ impl Display for VCFHeader {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let date: DateTime<Utc> = Utc::now();
 
-        writeln!(f, "##fileFormat=VCFv4.2")?;
+        writeln!(f, "##fileformat=VCFv4.2")?;
         writeln!(f, "##fileDate={}", date.format("%Y%m%d"))?;
         writeln!(f, "##reference={}", self.reference.display())?;
 
         writeln!(
             f,
-            r#"##INFO=<ID=TYPE,Number=A,Type=String,Description="Type of each allele (snv, ins, del, mnp, complex)">"#
+            r#"##INFO=<ID=TYPE,Number=A,Type=String,Description="Type of each allele (snv, ins, del, mnp, clumped)">"#
         )?;
 
         // writeln!(
