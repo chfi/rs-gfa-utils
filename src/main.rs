@@ -57,7 +57,7 @@ struct Opt {
 fn init_logger(opt: &LogOpt) {
     let mut builder = pretty_env_logger::formatted_builder();
     if !opt.quiet {
-        let mut log_level = log::LevelFilter::Error;
+        let mut log_level = log::LevelFilter::Info;
         if opt.info {
             log_level = log::LevelFilter::Info;
         }
