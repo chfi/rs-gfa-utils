@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use bstr::BString;
-
 use gfa::{
     cigar::CIGAR,
     gfa::GFA,
@@ -16,7 +14,7 @@ type PAF = gfa::gafpaf::PAF<OptionalFields>;
 fn load_pafs(gfa_path: &str, gaf_path: &str) -> Vec<PAF> {
     let gfa_path = PathBuf::from(gfa_path);
     let parser = GFAParser::new();
-    let gfa: GFA<BString, OptionalFields> =
+    let gfa: GFA<Vec<u8>, OptionalFields> =
         parser.parse_file(gfa_path).unwrap();
 
     let gaf_path = PathBuf::from(gaf_path);
@@ -40,7 +38,7 @@ fn compare_paf_query(
     q_len: usize,
     q_range: (usize, usize),
 ) {
-    assert_eq!(paf.query_seq_name, q_name);
+    assert_eq!(paf.query_seq_name, q_name.as_bytes());
     assert_eq!(paf.query_seq_len, q_len);
     assert_eq!(paf.query_seq_range, q_range);
 }
@@ -51,7 +49,7 @@ fn compare_paf_target(
     t_len: usize,
     t_range: (usize, usize),
 ) {
-    assert_eq!(paf.target_seq_name, t_name);
+    assert_eq!(paf.target_seq_name, t_name.as_bytes());
     assert_eq!(paf.target_seq_len, t_len);
     assert_eq!(paf.target_seq_range, t_range);
 }

@@ -15,9 +15,9 @@ macro_rules! filtered {
 /// include segments that are in the provided paths. Paths are to be
 /// provided as a slice of path names
 pub fn paths_new_subgraph<T: OptFields + Clone>(
-    gfa: &GFA<BString, T>,
+    gfa: &GFA<Vec<u8>, T>,
     paths: &[Vec<u8>],
-) -> GFA<BString, T> {
+) -> GFA<Vec<u8>, T> {
     let path_names: HashSet<&[u8]> = paths.iter().map(|p| p.as_ref()).collect();
 
     // Filter out the paths in the GFA we don't want
@@ -57,9 +57,9 @@ pub fn paths_new_subgraph<T: OptFields + Clone>(
 /// Returns a subgraph GFA that only contains elements with the
 /// provided segment names
 pub fn segments_subgraph<T: OptFields + Clone>(
-    gfa: &GFA<BString, T>,
+    gfa: &GFA<Vec<u8>, T>,
     segment_names: &[Vec<u8>],
-) -> GFA<BString, T> {
+) -> GFA<Vec<u8>, T> {
     let segment_names: HashSet<&[u8]> =
         segment_names.iter().map(|s| s.as_ref()).collect();
 

@@ -45,7 +45,7 @@ pub struct SubgraphArgs {
 }
 
 pub fn subgraph(gfa_path: &PathBuf, args: &SubgraphArgs) -> Result<()> {
-    let gfa: GFA<BString, OptionalFields> = load_gfa(gfa_path)?;
+    let gfa: GFA<Vec<u8>, OptionalFields> = load_gfa(gfa_path)?;
 
     let names: Vec<Vec<u8>> = if let Some(list) = &args.list {
         list.iter().map(|s| s.bytes().collect()).collect()

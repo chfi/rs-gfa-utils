@@ -47,9 +47,9 @@ fn gaf_to_paf_clone(gaf: &GAF) -> PAF {
 }
 
 fn find_segment<'a, T: OptFields>(
-    segs: &'a [Segment<BString, T>],
+    segs: &'a [Segment<Vec<u8>, T>],
     name: &[u8],
-) -> Option<&'a Segment<BString, T>> {
+) -> Option<&'a Segment<Vec<u8>, T>> {
     let ix = segs
         .binary_search_by(|s| {
             let seg: &[u8] = s.name.as_ref();
@@ -60,7 +60,7 @@ fn find_segment<'a, T: OptFields>(
 }
 
 fn cmp_links_find<T: OptFields, B: AsRef<[u8]>>(
-    link: &Link<BString, T>,
+    link: &Link<Vec<u8>, T>,
     from: B,
     to: B,
 ) -> Ordering {
@@ -75,8 +75,8 @@ fn cmp_links_find<T: OptFields, B: AsRef<[u8]>>(
 }
 
 fn cmp_links<T: OptFields>(
-    l1: &Link<BString, T>,
-    l2: &Link<BString, T>,
+    l1: &Link<Vec<u8>, T>,
+    l2: &Link<Vec<u8>, T>,
 ) -> Ordering {
     cmp_links_find(l1, &l2.from_segment, &l2.to_segment)
 }
@@ -90,7 +90,7 @@ fn unwrap_step(step: &GAFStep) -> (Orientation, &[u8]) {
 
 // must take sorted segment and link slices
 fn gaf_line_to_pafs<T: OptFields>(
-    segments: &[Segment<BString, T>],
+    segments: &[Segment<Vec<u8>, T>],
     gaf: &GAF,
 ) -> Vec<PAF> {
     match &gaf.path {
@@ -115,7 +115,7 @@ fn gaf_line_to_pafs<T: OptFields>(
             let mut tgt_offset = gaf.path_range.0;
             let mut query_remaining = gaf.seq_len;
 
-            let mut seqs: Vec<BString> = Vec::new();
+            let mut seqs: Vec<Vec<u8>> = Vec::new();
 
             let mut pafs = Vec::new();
 
@@ -168,7 +168,7 @@ fn gaf_line_to_pafs<T: OptFields>(
                     gaf_cigar = split_cg.1;
                 }
 
-                paf_cigar.iter().for_each(|op| {
+                paf_cigar.iter_single().for_each(|op| {
                     use CIGAROp::*;
                     match op {
                         D | N => {
@@ -178,13 +178,14 @@ fn gaf_line_to_pafs<T: OptFields>(
                     }
                 });
 
-                let residue_matches = paf_cigar.iter().fold(0, |acc, op| {
-                    if op.is_match_or_mismatch() {
-                        acc + 1
-                    } else {
-                        acc
-                    }
-                });
+                let residue_matches =
+                    paf_cigar.iter_single().fold(0, |acc, op| {
+                        if op.is_match_or_mismatch() {
+                            acc + 1
+                        } else {
+                            acc
+                        }
+                    });
 
                 set_cigar(&mut optional, paf_cigar);
 
@@ -198,7 +199,7 @@ fn gaf_line_to_pafs<T: OptFields>(
                     query_seq_len: gaf.seq_len,
                     query_seq_range: (query_start, query_end),
                     strand,
-                    target_seq_name,
+                    target_seq_name: target_seq_name.into(),
                     target_seq_len,
                     target_seq_range,
                     residue_matches,
@@ -217,7 +218,7 @@ fn gaf_line_to_pafs<T: OptFields>(
 }
 
 pub fn gaf_to_paf<T: OptFields>(
-    gfa: GFA<BString, T>,
+    gfa: GFA<Vec<u8>, T>,
     gaf_path: &Path,
 ) -> Vec<PAF> {
     let mut segments = gfa.segments;

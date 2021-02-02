@@ -1,6 +1,5 @@
 use structopt::StructOpt;
 
-use bstr::BString;
 use std::{fs::File, io::Write, path::PathBuf};
 
 use gfa::{
@@ -59,16 +58,17 @@ fn restored_gfa_path(path: &PathBuf) -> PathBuf {
 
 fn segment_id_to_usize(
     gfa_path: &PathBuf,
-    gfa: &GFA<BString, OptionalFields>,
+    gfa: &GFA<Vec<u8>, OptionalFields>,
     args: &GfaIdConvertArgs,
 ) -> Result<()> {
     let name_map = if let Some(ref path) = &args.name_map_path {
         NameMap::load_json(&path)?
     } else {
-        NameMap::build_from_gfa(&gfa)
+        NameMap::build_from_gfa(gfa)
     };
 
-    if let Some(new_gfa) = name_map.gfa_bstring_to_usize(&gfa, args.check_hash)
+    if let Some(new_gfa) =
+        name_map.gfa_bytestring_to_usize(&gfa, args.check_hash)
     {
         let new_gfa_path = converted_gfa_path(&gfa_path);
         let mut new_gfa_file = File::create(new_gfa_path.clone())?;
@@ -100,8 +100,8 @@ fn segment_id_to_bstring(
         .expect("Need name map to convert back");
     let name_map = NameMap::load_json(&name_map_path)?;
 
-    let new_gfa: GFA<BString, OptionalFields> = name_map
-        .gfa_usize_to_bstring(&gfa)
+    let new_gfa: GFA<Vec<u8>, OptionalFields> = name_map
+        .gfa_usize_to_bytestring(&gfa)
         .expect("Error during conversion -- is it the right name map?");
 
     let new_gfa_path = restored_gfa_path(gfa_path);
@@ -123,7 +123,7 @@ pub fn convert_segment_ids(
     }
 
     if args.to_usize {
-        let gfa: GFA<BString, OptionalFields> = load_gfa(&gfa_path)?;
+        let gfa: GFA<Vec<u8>, OptionalFields> = load_gfa(&gfa_path)?;
         segment_id_to_usize(&gfa_path, &gfa, args)
     } else {
         // Converting from integer to string names

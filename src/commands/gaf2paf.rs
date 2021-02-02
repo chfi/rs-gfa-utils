@@ -20,7 +20,7 @@ pub struct GAF2PAFArgs {
 }
 
 pub fn gaf2paf(gfa_path: &PathBuf, args: &GAF2PAFArgs) -> Result<()> {
-    let gfa: GFA<BString, OptionalFields> = load_gfa(gfa_path)?;
+    let gfa: GFA<Vec<u8>, OptionalFields> = load_gfa(gfa_path)?;
 
     let paf_lines = gaf_convert::gaf_to_paf(gfa, &args.gaf);
 

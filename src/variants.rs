@@ -11,9 +11,9 @@ use gfa::gfa::{Orientation, GFA};
 
 use crate::util::progress_bar;
 
+use gfa::gfa::Orientation::Forward;
 #[allow(unused_imports)]
 use log::{debug, info, trace, warn};
-use gfa::gfa::Orientation::Forward;
 
 pub type PathStep = (usize, usize, Orientation);
 
@@ -29,7 +29,7 @@ pub fn gfa_path_data(mut gfa: GFA<usize, ()>) -> PathData {
     info!("Building map from segment IDs to sequences");
     let segment_map: FnvHashMap<usize, BString> = segments
         .into_iter()
-        .map(|seg| (seg.name, seg.sequence))
+        .map(|seg| (seg.name, seg.sequence.into()))
         .collect();
 
     let gfa_paths = std::mem::take(&mut gfa.paths);
@@ -53,7 +53,7 @@ pub fn gfa_path_data(mut gfa: GFA<usize, ()>) -> PathData {
 
             let path_name = std::mem::take(&mut path.path_name);
 
-            (path_name, steps)
+            (BString::from(path_name), steps)
         })
         .unzip();
 
@@ -530,8 +530,18 @@ pub fn detect_variants_against_ref(
             ref_ix += 1;
             query_ix += 1;
         } else {
-            let (next_ref_node, _next_ref_offset, _) = if ref_ix + 1 < ref_path.len() { ref_path[ref_ix + 1] } else { (0, 0, Forward) };
-            let (next_query_node, _next_query_offset, _) = if query_ix + 1 < query_path.len() { query_path[query_ix + 1] } else { (0, 0, Forward) };
+            let (next_ref_node, _next_ref_offset, _) =
+                if ref_ix + 1 < ref_path.len() {
+                    ref_path[ref_ix + 1]
+                } else {
+                    (0, 0, Forward)
+                };
+            let (next_query_node, _next_query_offset, _) =
+                if query_ix + 1 < query_path.len() {
+                    query_path[query_ix + 1]
+                } else {
+                    (0, 0, Forward)
+                };
 
             if ref_ix + 1 < ref_path.len() && next_ref_node == query_node {
                 trace!("Deletion at ref {}\t query {}", ref_ix, query_ix);
@@ -563,7 +573,9 @@ pub fn detect_variants_against_ref(
                 entry.insert(variant);
 
                 ref_ix += 1;
-            } else if query_ix + 1 < query_path.len() && next_query_node == ref_node {
+            } else if query_ix + 1 < query_path.len()
+                && next_query_node == ref_node
+            {
                 trace!("Insertion at ref {}\t query {}", ref_ix, query_ix);
                 // Insertion
 
@@ -596,7 +608,8 @@ pub fn detect_variants_against_ref(
 
                 query_ix += 1;
             } else {
-                if ref_ix + 1 >= ref_path.len() || query_ix + 1 >= query_path.len()
+                if ref_ix + 1 >= ref_path.len()
+                    || query_ix + 1 >= query_path.len()
                 {
                     trace!("At end of ref or query");
                     break;
