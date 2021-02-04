@@ -46,23 +46,52 @@ pub fn find_ultrabubbles(gfa_path: &PathBuf) -> Result<Vec<(u64, u64)>> {
 
     info!("Computing ultrabubbles");
     debug!("Building biedged graph");
-
+    let t = std::time::Instant::now();
     let be_graph = BiedgedGraph::from_gfa(&gfa);
+    debug!(
+        "  biedged graph took {:.3} ms",
+        t.elapsed().as_secs_f64() * 1000.0
+    );
 
     debug!("Building cactus graph");
+    let t = std::time::Instant::now();
     let cactus_graph = CactusGraph::from_biedged_graph(&be_graph);
+    debug!(
+        "  cactus graph took {:.3} ms",
+        t.elapsed().as_secs_f64() * 1000.0
+    );
 
     debug!("Building cactus tree");
+    let t = std::time::Instant::now();
     let cactus_tree = CactusTree::from_cactus_graph(&cactus_graph);
+    debug!(
+        "  cactus tree took {:.3} ms",
+        t.elapsed().as_secs_f64() * 1000.0
+    );
 
     debug!("Building bridge forest");
+    let t = std::time::Instant::now();
     let bridge_forest = BridgeForest::from_cactus_graph(&cactus_graph);
+    debug!(
+        "  bridge forest took {:.3} ms",
+        t.elapsed().as_secs_f64() * 1000.0
+    );
 
     debug!("Finding ultrabubbles");
+    let t = std::time::Instant::now();
     let ultrabubbles =
         cactusgraph::find_ultrabubbles(&cactus_tree, &bridge_forest);
+    debug!(
+        "  ultrabubbles took {:.3} ms",
+        t.elapsed().as_secs_f64() * 1000.0
+    );
 
+    let t = std::time::Instant::now();
     let ultrabubbles = cactusgraph::inverse_map_ultrabubbles(ultrabubbles);
+    debug!(
+        "  inverting ultrabubbles took {:.3} ms",
+        t.elapsed().as_secs_f64() * 1000.0
+    );
 
     debug!("Done computing ultrabubbles");
     Ok(ultrabubbles.into_iter().map(|(x_y, _cont)| x_y).collect())
