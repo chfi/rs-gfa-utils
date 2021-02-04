@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "gfautil"
-version = "0.4.0-alpha.1"
+version = "0.4.0-alpha.2"
 dependencies = [
  "bstr",
  "chrono",
@@ -629,9 +629,9 @@ checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 
 [[package]]
 name = "saboten"
-version = "0.1.1"
+version = "0.1.2-alpha"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5900304fd6914730aed623d16d9433af6450b80b4def34f59ad59281cace94df"
+checksum = "4fe93a141fb090acf69dfbb531f10b88dcac7a0722ba3aaf2a570dc3b14a03ba"
 dependencies = [
  "fnv",
  "fxhash",
