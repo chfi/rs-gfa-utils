@@ -42,16 +42,22 @@ pub fn find_ultrabubbles(gfa_path: &PathBuf) -> Result<Vec<(u64, u64)>> {
     parser_builder.paths = false;
     parser_builder.containments = false;
     let parser: GFAParser<usize, ()> = parser_builder.build();
-    let gfa: GFA<usize, ()> = parser.parse_file(gfa_path)?;
 
     info!("Computing ultrabubbles");
-    debug!("Building biedged graph");
-    let t = std::time::Instant::now();
-    let be_graph = BiedgedGraph::from_gfa(&gfa);
-    debug!(
-        "  biedged graph took {:.3} ms",
-        t.elapsed().as_secs_f64() * 1000.0
-    );
+    let be_graph = {
+        let gfa: GFA<usize, ()> = parser.parse_file(gfa_path)?;
+
+        debug!("Building biedged graph");
+        let t = std::time::Instant::now();
+        let be_graph = BiedgedGraph::from_gfa(&gfa);
+        debug!(
+            "  biedged graph took {:.3} ms",
+            t.elapsed().as_secs_f64() * 1000.0
+        );
+        debug!("");
+
+        be_graph
+    };
 
     debug!("Building cactus graph");
     let t = std::time::Instant::now();
@@ -60,6 +66,7 @@ pub fn find_ultrabubbles(gfa_path: &PathBuf) -> Result<Vec<(u64, u64)>> {
         "  cactus graph took {:.3} ms",
         t.elapsed().as_secs_f64() * 1000.0
     );
+    debug!("");
 
     debug!("Building cactus tree");
     let t = std::time::Instant::now();
@@ -68,6 +75,7 @@ pub fn find_ultrabubbles(gfa_path: &PathBuf) -> Result<Vec<(u64, u64)>> {
         "  cactus tree took {:.3} ms",
         t.elapsed().as_secs_f64() * 1000.0
     );
+    debug!("");
 
     debug!("Building bridge forest");
     let t = std::time::Instant::now();
@@ -76,6 +84,7 @@ pub fn find_ultrabubbles(gfa_path: &PathBuf) -> Result<Vec<(u64, u64)>> {
         "  bridge forest took {:.3} ms",
         t.elapsed().as_secs_f64() * 1000.0
     );
+    debug!("");
 
     debug!("Finding ultrabubbles");
     let t = std::time::Instant::now();
@@ -85,6 +94,7 @@ pub fn find_ultrabubbles(gfa_path: &PathBuf) -> Result<Vec<(u64, u64)>> {
         "  ultrabubbles took {:.3} ms",
         t.elapsed().as_secs_f64() * 1000.0
     );
+    debug!("");
 
     let t = std::time::Instant::now();
     let ultrabubbles = cactusgraph::inverse_map_ultrabubbles(ultrabubbles);
