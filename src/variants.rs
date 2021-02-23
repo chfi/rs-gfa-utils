@@ -199,7 +199,7 @@ fn detect_variants_against_ref_ranges<H: VariantHandler>(
     let mut query_seq_ix;
 
     loop {
-        if ref_ix >= ref_end || query_ix >= query_end {
+        if ref_ix > ref_end || query_ix > query_end {
             break;
         }
 
@@ -217,7 +217,7 @@ fn detect_variants_against_ref_ranges<H: VariantHandler>(
             ref_ix += 1;
             query_ix += 1;
         } else {
-            if ref_ix + 1 >= ref_end || query_ix + 1 >= query_end {
+            if ref_ix + 1 > ref_end || query_ix + 1 > query_end {
                 trace!("At end of ref or query");
                 break;
             }
