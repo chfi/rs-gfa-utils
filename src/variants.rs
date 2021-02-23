@@ -181,6 +181,81 @@ trait VariantHandler {
     );
 }
 
+fn detect_variants_against_ref_ranges<H: VariantHandler>(
+    segment_sequences: &FnvHashMap<usize, BString>,
+    ref_path: &[(usize, usize, Orientation)],
+    query_path: &[(usize, usize, Orientation)],
+    ref_range: (usize, usize),
+    query_range: (usize, usize),
+    handler: &mut H,
+) {
+    let (ref_start, ref_end) = ref_range;
+    let (query_start, query_end) = query_range;
+
+    let mut ref_ix = ref_start;
+    let mut query_ix = query_start;
+
+    let mut ref_seq_ix;
+    let mut query_seq_ix;
+
+    loop {
+        if ref_ix >= ref_end || query_ix >= query_end {
+            break;
+        }
+
+        let (ref_node, ref_offset, _) = ref_path[ref_ix];
+        let ref_seq = segment_sequences.get(&ref_node).unwrap();
+
+        ref_seq_ix = ref_offset;
+
+        let (query_node, query_offset, _) = query_path[query_ix];
+        let query_seq = segment_sequences.get(&query_node).unwrap();
+
+        query_seq_ix = query_offset;
+
+        if ref_node == query_node {
+            ref_ix += 1;
+            query_ix += 1;
+        } else {
+            if ref_ix + 1 >= ref_end || query_ix + 1 >= query_end {
+                trace!("At end of ref or query");
+                break;
+            }
+            let (next_ref_node, _next_ref_offset, _) = ref_path[ref_ix + 1];
+            let (next_query_node, _next_query_offset, _) =
+                query_path[query_ix + 1];
+
+            if next_ref_node == query_node {
+                trace!("Deletion at ref {}\t query {}", ref_ix, query_ix);
+                // Deletion
+                handler.deletion(ref_ix, query_ix, ref_seq_ix, query_seq_ix);
+
+                ref_ix += 1;
+            } else if next_query_node == ref_node {
+                trace!("Insertion at ref {}\t query {}", ref_ix, query_ix);
+                // Insertion
+                handler.insertion(ref_ix, query_ix, ref_seq_ix, query_seq_ix);
+
+                query_ix += 1;
+            } else {
+                if ref_seq != query_seq {
+                    handler.mismatch(
+                        ref_ix,
+                        query_ix,
+                        ref_seq_ix,
+                        query_seq_ix,
+                    );
+                } else {
+                    handler.match_(ref_ix, query_ix, ref_seq_ix, query_seq_ix);
+                }
+
+                ref_ix += 1;
+                query_ix += 1;
+            }
+        }
+    }
+}
+
 fn detect_variants_against_ref_with<H: VariantHandler>(
     segment_sequences: &FnvHashMap<usize, BString>,
     ref_path: &[(usize, usize, Orientation)],
@@ -795,6 +870,36 @@ fn path_data_sub_paths<'a, 'b>(
     Some(sub_paths)
 }
 
+fn path_data_sub_path_ranges(
+    path_data: &PathData,
+    path_indices: &PathIndices,
+    from: u64,
+    to: u64,
+) -> Option<Vec<(usize, (usize, usize))>> {
+    let from_indices = path_indices.get(&from)?;
+    let to_indices = path_indices.get(&to)?;
+
+    let sub_path_ranges = path_data
+        .paths
+        .iter()
+        .enumerate()
+        .filter_map(|(path_ix, path)| {
+            let from_ix = *from_indices.get(&path_ix)?;
+            let to_ix = *to_indices.get(&path_ix)?;
+            let from = from_ix.min(to_ix);
+            let to = from_ix.max(to_ix);
+            let sub_path = &path[from..=to];
+            if sub_path.len() > 1 {
+                Some((path_ix, (from, to)))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Some(sub_path_ranges)
+}
+
 pub fn detect_variants_in_sub_paths(
     variant_config: &VariantConfig,
     path_data: &PathData,
@@ -807,6 +912,9 @@ pub fn detect_variants_in_sub_paths(
         FnvHashMap::default();
 
     let sub_paths = path_data_sub_paths(path_data, path_indices, from, to)?;
+
+    let sub_path_ranges =
+        path_data_sub_path_ranges(path_data, path_indices, from, to)?;
 
     let mut query_paths = sub_paths.clone();
 
@@ -826,6 +934,81 @@ pub fn detect_variants_in_sub_paths(
         }
     };
 
+    let mut query_path_ranges = sub_path_ranges.clone();
+
+    query_path_ranges.sort_by(|&(x_ix, (x0, x1)), &(y_ix, (y0, y1))| {
+        let x = path_data.paths.get(x_ix).unwrap();
+        let y = path_data.paths.get(y_ix).unwrap();
+
+        let xs = &x[x0..=x1];
+        let ys = &y[y0..=y1];
+
+        xs.cmp(ys)
+    });
+
+    query_path_ranges.dedup_by(
+        |&mut (x_ix, (x0, x1)), &mut (y_ix, (y0, y1))| {
+            let x = path_data.paths.get(x_ix).unwrap();
+            let y = path_data.paths.get(y_ix).unwrap();
+
+            let xs = &x[x0..=x1];
+            let ys = &y[y0..=y1];
+
+            xs == ys
+        },
+    );
+
+    variants.extend(sub_path_ranges.iter().filter_map(
+        |&(ref_ix, (ref_from, ref_to))| {
+            let ref_name = path_data.path_names.get(ref_ix).unwrap();
+            if !is_ref_path(ref_name.as_ref()) {
+                return None;
+            }
+
+            let ref_path = path_data.paths.get(ref_ix).unwrap();
+            let ref_orient = sub_path_edge_orient(ref_path);
+
+            let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
+                FnvHashMap::default();
+
+            for &(query_ix, (query_from, query_to)) in query_path_ranges.iter()
+            {
+                let query_name = path_data.path_names.get(query_ix)?;
+                let query_path = path_data.paths.get(query_ix).unwrap();
+
+                let query_orient = sub_path_edge_orient(query_path);
+
+                if ref_name != query_name
+                    && !variant_config.ignore_path(ref_orient, query_orient)
+                {
+                    let mut handler = VCFVariantHandler::new(
+                        &path_data.segment_map,
+                        ref_name,
+                        ref_path,
+                        query_path,
+                    );
+
+                    detect_variants_against_ref_ranges(
+                        &path_data.segment_map,
+                        ref_path,
+                        query_path,
+                        (ref_from, ref_to),
+                        (query_from, query_to),
+                        &mut handler,
+                    );
+
+                    for (var_key, var_set) in handler.variants {
+                        ref_map.entry(var_key).or_default().extend(var_set);
+                    }
+                }
+            }
+
+            let ref_name: BString = ref_name.clone();
+            Some((ref_name, ref_map))
+        },
+    ));
+
+    /*
     variants.extend(sub_paths.iter().filter_map(|(ref_ix, ref_path)| {
         let ref_name = path_data.path_names.get(*ref_ix)?;
         if !is_ref_path(ref_name.as_ref()) {
@@ -859,6 +1042,7 @@ pub fn detect_variants_in_sub_paths(
         let ref_name: BString = ref_name.clone();
         Some((ref_name, ref_map))
     }));
+    */
 
     Some(variants)
 }
