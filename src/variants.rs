@@ -911,20 +911,8 @@ pub fn detect_variants_in_sub_paths(
     let mut variants: FnvHashMap<BString, FnvHashMap<_, FnvHashSet<_>>> =
         FnvHashMap::default();
 
-    let sub_paths = path_data_sub_paths(path_data, path_indices, from, to)?;
-
     let sub_path_ranges =
         path_data_sub_path_ranges(path_data, path_indices, from, to)?;
-
-    let mut query_paths = sub_paths.clone();
-
-    query_paths.sort_by(|(_, v), (_, w)| {
-        let v_iter = v.iter().map(|(a, b, c)| (a, b, bool::from(*c)));
-        let w_iter = w.iter().map(|(a, b, c)| (a, b, bool::from(*c)));
-        v_iter.cmp(w_iter)
-    });
-
-    query_paths.dedup_by(|(_, v), (_, w)| v == w);
 
     let is_ref_path = |p: &BStr| {
         if let Some(ref_path_names) = ref_path_names {
@@ -1007,42 +995,6 @@ pub fn detect_variants_in_sub_paths(
             Some((ref_name, ref_map))
         },
     ));
-
-    /*
-    variants.extend(sub_paths.iter().filter_map(|(ref_ix, ref_path)| {
-        let ref_name = path_data.path_names.get(*ref_ix)?;
-        if !is_ref_path(ref_name.as_ref()) {
-            return None;
-        }
-        let ref_orient = sub_path_edge_orient(ref_path);
-
-        let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
-            FnvHashMap::default();
-
-        for (query_ix, query_path) in query_paths.iter() {
-            let query_name = path_data.path_names.get(*query_ix)?;
-            let query_orient = sub_path_edge_orient(query_path);
-
-            if ref_name != query_name
-                && !variant_config.ignore_path(ref_orient, query_orient)
-            {
-                let vars = detect_variants_against_ref(
-                    &path_data.segment_map,
-                    ref_name,
-                    ref_path,
-                    query_path,
-                );
-
-                for (var_key, var_set) in vars {
-                    ref_map.entry(var_key).or_default().extend(var_set);
-                }
-            }
-        }
-
-        let ref_name: BString = ref_name.clone();
-        Some((ref_name, ref_map))
-    }));
-    */
 
     Some(variants)
 }
