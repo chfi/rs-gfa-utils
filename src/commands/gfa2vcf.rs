@@ -1,4 +1,4 @@
-use bstr::{io::*, BString};
+use bstr::{io::*, BString, ByteSlice};
 use fnv::{FnvHashMap, FnvHashSet};
 use indicatif::{
     ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle,
@@ -90,6 +90,24 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
 
         if gfa.paths.len() < 2 {
             panic!("GFA must contain at least two paths");
+        }
+
+        if let Some(ref_paths) = ref_path_names.as_ref() {
+            let gfa_paths = gfa
+                .paths
+                .iter()
+                .map(|path| path.path_name.as_bstr())
+                .collect::<FnvHashSet<_>>();
+
+            for path in ref_paths.iter() {
+                if !gfa_paths.contains(path.as_bstr()) {
+                    eprintln!(
+                        "Reference path does not exist in graph: {}",
+                        path.as_bstr()
+                    );
+                    std::process::exit(1);
+                }
+            }
         }
 
         info!("GFA has {} paths", gfa.paths.len());
