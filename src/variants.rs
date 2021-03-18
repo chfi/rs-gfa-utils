@@ -471,32 +471,6 @@ impl<'a> VariantHandler for VCFVariantHandler<'a> {
     }
 }
 
-/// NB Should be equivalent to `detect_variants_against_ref` in
-/// function, but I need to test it, and I'm not sure about how
-/// performance may differ
-pub fn detect_variants_against_ref_(
-    segment_sequences: &FnvHashMap<usize, BString>,
-    ref_name: &[u8],
-    ref_path: &[(usize, usize, Orientation)],
-    query_path: &[(usize, usize, Orientation)],
-) -> FnvHashMap<VariantKey, FnvHashSet<Variant>> {
-    let mut handler = VCFVariantHandler::new(
-        segment_sequences,
-        ref_name,
-        ref_path,
-        query_path,
-    );
-
-    detect_variants_against_ref_with(
-        segment_sequences,
-        ref_path,
-        query_path,
-        &mut handler,
-    );
-
-    handler.variants
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SNPRow {
     pub ref_pos: usize,
@@ -577,231 +551,6 @@ impl<'a> VariantHandler for SNPVariantHandler<'a> {
     fn match_(&mut self, _: usize, _: usize, _: usize, _: usize) {}
 }
 
-pub fn detect_variants_against_ref(
-    segment_sequences: &FnvHashMap<usize, BString>,
-    ref_name: &[u8],
-    ref_path: &[(usize, usize, Orientation)],
-    query_path: &[(usize, usize, Orientation)],
-) -> FnvHashMap<VariantKey, FnvHashSet<Variant>> {
-    let mut variants: FnvHashMap<_, FnvHashSet<_>> = FnvHashMap::default();
-
-    let mut ref_ix = 0;
-    let mut query_ix = 0;
-
-    let mut ref_seq_ix;
-
-    loop {
-        if ref_ix >= ref_path.len() || query_ix >= query_path.len() {
-            break;
-        }
-
-        let (ref_node, ref_offset, _) = ref_path[ref_ix];
-        let ref_seq = segment_sequences.get(&ref_node).unwrap();
-
-        ref_seq_ix = ref_offset;
-
-        let (query_node, _query_offset, _) = query_path[query_ix];
-        let query_seq = segment_sequences.get(&query_node).unwrap();
-
-        if ref_node == query_node {
-            ref_ix += 1;
-            query_ix += 1;
-        } else {
-            let ref_path_len = ref_path.len();
-            let query_path_len = query_path.len();
-
-            let (next_ref_node, _next_ref_offset, _) =
-                if ref_ix + 1 < ref_path_len {
-                    ref_path[ref_ix + 1]
-                } else {
-                    (0, 0, Forward)
-                };
-            let (next_query_node, _next_query_offset, _) =
-                if query_ix + 1 < query_path_len {
-                    query_path[query_ix + 1]
-                } else {
-                    (0, 0, Forward)
-                };
-
-            if ref_ix + 1 < ref_path_len && next_ref_node == query_node {
-                trace!("Deletion at ref {}\t query {}", ref_ix, query_ix);
-                // Deletion
-                let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
-                    ref_path[ref_ix]
-                } else {
-                    ref_path[ref_ix - 1]
-                };
-
-                let prev_ref_seq =
-                    segment_sequences.get(&prev_ref_node).unwrap();
-
-                let last_prev_seq: u8 = *prev_ref_seq.last().unwrap();
-
-                let key_ref_seq: BString = std::iter::once(last_prev_seq)
-                    .chain(ref_seq.iter().copied())
-                    .collect();
-
-                let var_key = VariantKey {
-                    ref_name: ref_name.into(),
-                    pos: ref_seq_ix - 1,
-                    sequence: key_ref_seq,
-                };
-
-                let variant = Variant::Del(BString::from(&[last_prev_seq][..]));
-
-                let entry = variants.entry(var_key).or_default();
-                entry.insert(variant);
-
-                ref_ix += 1;
-            } else if query_ix + 1 < query_path_len
-                && next_query_node == ref_node
-            {
-                trace!("Insertion at ref {}\t query {}", ref_ix, query_ix);
-                // Insertion
-
-                let (prev_ref_node, _prev_ref_offset, _) = if ref_ix == 0 {
-                    ref_path[ref_ix]
-                } else {
-                    ref_path[ref_ix - 1]
-                };
-                let prev_ref_seq =
-                    segment_sequences.get(&prev_ref_node).unwrap();
-
-                let last_prev_seq: u8 = *prev_ref_seq.last().unwrap();
-
-                let key_ref_seq: BString =
-                    std::iter::once(last_prev_seq).collect();
-
-                let var_key = VariantKey {
-                    ref_name: ref_name.into(),
-                    pos: ref_seq_ix - 1,
-                    sequence: key_ref_seq,
-                };
-
-                let var_seq: BString = std::iter::once(last_prev_seq)
-                    .chain(query_seq.iter().copied())
-                    .collect();
-                let variant = Variant::Ins(var_seq);
-
-                let entry = variants.entry(var_key).or_default();
-                entry.insert(variant);
-
-                query_ix += 1;
-            } else {
-                if ref_ix + 1 >= ref_path_len || query_ix + 1 >= query_path_len
-                {
-                    trace!("At end of ref or query");
-                    break;
-                }
-
-                if ref_seq != query_seq {
-                    let mut var_key = VariantKey {
-                        ref_name: ref_name.into(),
-                        pos: ref_seq_ix,
-                        sequence: ref_seq.as_bstr().to_owned(),
-                    };
-
-                    let variant = if ref_seq.len() == query_seq.len() {
-                        if ref_seq.len() == 1 {
-                            trace!(
-                                "SNV at ref {}\t query {}",
-                                ref_ix,
-                                query_ix
-                            );
-
-                            let last_query_seq: u8 = *query_seq.last().unwrap();
-                            Variant::Snv(last_query_seq)
-                        } else {
-                            let num_differences = ref_seq
-                                .iter()
-                                .zip(query_seq.iter())
-                                .fold(0, |count, (r, q)| {
-                                    if r != q {
-                                        count + 1
-                                    } else {
-                                        count
-                                    }
-                                });
-
-                            if num_differences == ref_seq.len() {
-                                trace!(
-                                    "MNP at ref {}\t query {}",
-                                    ref_ix,
-                                    query_ix
-                                );
-
-                                Variant::Mnp(query_seq.as_bstr().to_owned())
-                            } else {
-                                trace!(
-                                    "CLUMPED at ref {}\t query {}",
-                                    ref_ix,
-                                    query_ix
-                                );
-
-                                Variant::Clumped(query_seq.as_bstr().to_owned())
-                            }
-                        }
-                    } else {
-                        let (prev_ref_node, _prev_ref_offset, _) =
-                            if ref_ix == 0 {
-                                ref_path[ref_ix]
-                            } else {
-                                ref_path[ref_ix - 1]
-                            };
-
-                        let prev_ref_seq =
-                            segment_sequences.get(&prev_ref_node).unwrap();
-                        let last_prev_seq: u8 = *prev_ref_seq.last().unwrap();
-
-                        let ref_seq_vcf: BString =
-                            std::iter::once(last_prev_seq)
-                                .chain(ref_seq.iter().copied())
-                                .collect();
-
-                        var_key = VariantKey {
-                            ref_name: ref_name.into(),
-                            pos: ref_seq_ix - 1,
-                            sequence: ref_seq_vcf,
-                        };
-
-                        let alt_seq_vcf: BString =
-                            std::iter::once(last_prev_seq)
-                                .chain(query_seq.iter().copied())
-                                .collect();
-
-                        if ref_seq.len() > query_seq.len() {
-                            trace!(
-                                "Deletion at ref {}\t query {}",
-                                ref_ix,
-                                query_ix
-                            );
-
-                            Variant::Del(alt_seq_vcf)
-                        } else {
-                            trace!(
-                                "Insertion at ref {}\t query {}",
-                                ref_ix,
-                                query_ix
-                            );
-
-                            Variant::Ins(alt_seq_vcf)
-                        }
-                    };
-
-                    let entry = variants.entry(var_key).or_default();
-                    entry.insert(variant);
-                }
-
-                ref_ix += 1;
-
-                query_ix += 1;
-            }
-        }
-    }
-
-    variants
-}
-
 fn sub_path_edge_orient(
     path: &[(usize, usize, Orientation)],
 ) -> (Orientation, Orientation) {
@@ -839,36 +588,6 @@ impl Default for VariantConfig {
 }
 
 pub type PathIndices = FnvHashMap<u64, FnvHashMap<usize, usize>>;
-
-fn path_data_sub_paths<'a, 'b>(
-    path_data: &'a PathData,
-    path_indices: &'b PathIndices,
-    from: u64,
-    to: u64,
-) -> Option<Vec<(usize, &'a [PathStep])>> {
-    let from_indices = path_indices.get(&from)?;
-    let to_indices = path_indices.get(&to)?;
-
-    let sub_paths = path_data
-        .paths
-        .iter()
-        .enumerate()
-        .filter_map(|(path_ix, path)| {
-            let from_ix = *from_indices.get(&path_ix)?;
-            let to_ix = *to_indices.get(&path_ix)?;
-            let from = from_ix.min(to_ix);
-            let to = from_ix.max(to_ix);
-            let sub_path = &path[from..=to];
-            if sub_path.len() > 1 {
-                Some((path_ix, sub_path))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    Some(sub_paths)
-}
 
 fn path_data_sub_path_ranges(
     path_data: &PathData,
@@ -997,6 +716,36 @@ pub fn detect_variants_in_sub_paths(
     ));
 
     Some(variants)
+}
+
+fn path_data_sub_paths<'a, 'b>(
+    path_data: &'a PathData,
+    path_indices: &'b PathIndices,
+    from: u64,
+    to: u64,
+) -> Option<Vec<(usize, &'a [PathStep])>> {
+    let from_indices = path_indices.get(&from)?;
+    let to_indices = path_indices.get(&to)?;
+
+    let sub_paths = path_data
+        .paths
+        .iter()
+        .enumerate()
+        .filter_map(|(path_ix, path)| {
+            let from_ix = *from_indices.get(&path_ix)?;
+            let to_ix = *to_indices.get(&path_ix)?;
+            let from = from_ix.min(to_ix);
+            let to = from_ix.max(to_ix);
+            let sub_path = &path[from..=to];
+            if sub_path.len() > 1 {
+                Some((path_ix, sub_path))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Some(sub_paths)
 }
 
 pub fn find_snps_in_sub_paths(
