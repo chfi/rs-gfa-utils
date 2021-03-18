@@ -605,11 +605,16 @@ fn path_data_sub_path_ranges(
         .filter_map(|(path_ix, path)| {
             let from_ix = *from_indices.get(&path_ix)?;
             let to_ix = *to_indices.get(&path_ix)?;
+
             let from = from_ix.min(to_ix);
             let to = from_ix.max(to_ix);
+
+            // let from = from_ix;
+            // let to = to_ix;
+
             let sub_path = &path[from..=to];
             if sub_path.len() > 1 {
-                Some((path_ix, (from, to)))
+                Some((path_ix, (from_ix, to_ix)))
             } else {
                 None
             }
@@ -647,8 +652,17 @@ pub fn detect_variants_in_sub_paths(
         let x = path_data.paths.get(x_ix).unwrap();
         let y = path_data.paths.get(y_ix).unwrap();
 
-        let xs = &x[x0..=x1];
-        let ys = &y[y0..=y1];
+        let xa = x0.min(x1);
+        let xb = x0.max(x1);
+
+        let ya = y0.min(y1);
+        let yb = y0.max(y1);
+
+        let xs = &x[xa..=xb];
+        let ys = &y[ya..=yb];
+
+        // let xs = &x[x0..=x1];
+        // let ys = &y[y0..=y1];
 
         xs.cmp(ys)
     });
@@ -658,8 +672,17 @@ pub fn detect_variants_in_sub_paths(
             let x = path_data.paths.get(x_ix).unwrap();
             let y = path_data.paths.get(y_ix).unwrap();
 
-            let xs = &x[x0..=x1];
-            let ys = &y[y0..=y1];
+            // let xs = &x[x0..=x1];
+            // let ys = &y[y0..=y1];
+
+            let xa = x0.min(x1);
+            let xb = x0.max(x1);
+
+            let ya = y0.min(y1);
+            let yb = y0.max(y1);
+
+            let xs = &x[xa..=xb];
+            let ys = &y[ya..=yb];
 
             xs == ys
         },
