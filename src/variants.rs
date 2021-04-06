@@ -23,6 +23,30 @@ pub struct PathData {
     pub paths: Vec<Vec<PathStep>>,
 }
 
+impl PathData {
+    fn hash_subpath(&self, path: usize, from: usize, to: usize) -> Option<u64> {
+        use fnv::FnvHasher;
+        use std::hash::{Hash, Hasher};
+
+        let subpath = self.paths.get(path)?;
+
+        let mut state = FnvHasher::default();
+
+        for &(node, _, orient) in &subpath[from..=to] {
+            let seq = self.segment_map.get(&node)?.as_slice();
+
+            if orient.is_reverse() {
+                handlegraph::util::dna::rev_comp_iter(seq)
+                    .for_each(|b| b.hash(&mut state));
+            } else {
+                seq.hash(&mut state);
+            }
+        }
+
+        Some(state.finish())
+    }
+}
+
 pub fn gfa_path_data(mut gfa: GFA<usize, ()>) -> PathData {
     let segments = std::mem::take(&mut gfa.segments);
 
