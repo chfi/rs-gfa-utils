@@ -736,81 +736,54 @@ pub fn detect_variants_in_sub_paths(
         }
     };
 
-    let mut query_path_ranges = sub_path_ranges.clone();
+    let mut variants = Vec::new();
+    let allele_map = allele_groups_in_path_ranges(&sub_path_ranges, path_data);
+    // for each ref in our ranges at this site
+    sub_path_ranges.iter().for_each(|&(path_ix, (from, to))| {
+        let path_name = path_data.path_names.get(path_ix).unwrap();
+        if is_ref_path(path_name.as_ref()) {
+            // get the hash of the reference
+            let ref_key =
+                path_data.hash_subpath(path_ix, from, to).unwrap();
+            let ref_path = path_data.paths.get(path_ix).unwrap();
+            let ref_pos = ref_path[from].1;
+            let ref_name = path_data.path_names.get(path_ix).unwrap();
+            let ref_seq =
+                path_data.subpath_seq(path_ix, from, to).unwrap();
+            let alt_list: Vec<BString> = allele_map
+                .iter()
+                .filter_map(|(hash, alts)| {
+                    if *hash != ref_key {
+                        let (q_ix, (q_s, q_e)) = alts[0];
+                        Some(path_data.subpath_seq(q_ix, q_s, q_e))
+                    } else {
+                        None
+                    }
+                })
+                .map(|x| x.unwrap())
+                .collect();
+	    let id = format!(">{}>{}", from, to);
+	    if !alt_list.is_empty() {
+		let alts = bstr::join(",", alt_list);
+		// collect the alleles for the ref and alternates
+		let vcf = VCFRecord {
+                    chromosome: ref_name.clone(),
+                    position: ref_pos as i64,
+                    id: Some(id.into()),
+                    reference: ref_seq,
+                    alternate: Some(alts.into()),
+                    quality: None,
+                    filter: None,
+                    info: None,
+                    format: None,
+                    sample_name: None,
+		};
 
-    query_path_ranges.sort_by(|&(x_ix, (x0, x1)), &(y_ix, (y0, y1))| {
-        let x = path_data.paths.get(x_ix).unwrap();
-        let y = path_data.paths.get(y_ix).unwrap();
-
-        let xa = x0.min(x1);
-        let xb = x0.max(x1);
-
-        let ya = y0.min(y1);
-        let yb = y0.max(y1);
-
-        let xs = &x[xa..=xb];
-        let ys = &y[ya..=yb];
-
-        // let xs = &x[x0..=x1];
-        // let ys = &y[y0..=y1];
-
-        xs.cmp(ys)
+		variants.push(vcf);
+	    }
+        }
     });
 
-    let mut variants = Vec::new();
-    query_path_ranges
-        .iter()
-        .group_by(|&(x_ix, (x0, x1))| (x0, x1))
-        .into_iter()
-        .for_each(|((s, e), group)| {
-            let curr_ranges =
-                group.into_iter().map(|&(p, (s, e))| (p, (s, e))).collect();
-            let allele_map =
-                allele_groups_in_path_ranges(&curr_ranges, path_data);
-
-            // for each ref in our ranges at this site
-            curr_ranges.iter().for_each(|&(path_ix, (from, to))| {
-                let path_name = path_data.path_names.get(path_ix).unwrap();
-                if is_ref_path(path_name.as_ref()) {
-                    // get the hash of the reference
-                    let ref_key =
-                        path_data.hash_subpath(path_ix, from, to).unwrap();
-                    let ref_path = path_data.paths.get(path_ix).unwrap();
-                    let ref_pos = ref_path[from].1;
-                    let ref_name = path_data.path_names.get(path_ix).unwrap();
-                    let ref_seq =
-                        path_data.subpath_seq(path_ix, from, to).unwrap();
-                    let alt_list: Vec<BString> = allele_map
-                        .iter()
-                        .filter_map(|(hash, alts)| {
-                            if *hash != ref_key {
-                                let (q_ix, (q_s, q_e)) = alts[0];
-                                Some(path_data.subpath_seq(q_ix, q_s, q_e))
-                            } else {
-                                None
-                            }
-                        })
-                        .map(|x| x.unwrap())
-                        .collect();
-                    let alts = bstr::join(",", alt_list);
-                    // collect the alleles for the ref and alternates
-                    let vcf = VCFRecord {
-                        chromosome: ref_name.clone(),
-                        position: ref_pos as i64,
-                        id: None,
-                        reference: ref_seq.clone(),
-                        alternate: Some(alts.into()),
-                        quality: None,
-                        filter: None,
-                        info: None,
-                        format: None,
-                        sample_name: None,
-                    };
-
-		    variants.push(vcf);
-                }
-	    })
-	});
     Some(variants)
 }
 
