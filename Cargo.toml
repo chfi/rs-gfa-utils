@@ -16,7 +16,7 @@ categories = ["science"]
 rayon = "1.4"
 bstr = "0.2"
 fnv = "1.0"
-
+itertools = "0.10.0"
 clap = "2.33"
 structopt = "0.3"
 chrono = "0.4"

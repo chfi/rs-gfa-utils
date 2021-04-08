@@ -163,8 +163,7 @@ pub fn gfa2vcf(gfa_path: &PathBuf, args: GFA2VCFArgs) -> Result<()> {
                     to,
                 )?;
 
-                let vcf_records = variants::variant_vcf_record(&vars);
-                Some(vcf_records)
+                Some(vars)
             })
             .flatten(),
     );
