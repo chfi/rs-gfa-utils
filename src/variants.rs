@@ -34,11 +34,11 @@ impl PathData {
 
         let mut state = FnvHasher::default();
 
-	let (s, e) = if from <= to {
-	    (from, to)
-	} else {
-	    (to, from)
-	};
+        let (s, e) = if from <= to {
+            (from, to)
+        } else {
+            (to, from)
+        };
 
         for &(node, _, orient) in &subpath[s..=e] {
             let seq = self.segment_map.get(&node)?.as_slice();
@@ -63,11 +63,11 @@ impl PathData {
 
         let mut seq: BString = "".into();
 
-	let (s, e) = if from <= to {
-	    (from, to)
-	} else {
-	    (to, from)
-	};
+        let (s, e) = if from <= to {
+            (from, to)
+        } else {
+            (to, from)
+        };
 
         for &(node, _, orient) in &subpath[s..=e] {
             let node_seq = self.segment_map.get(&node)?.as_slice();
@@ -527,8 +527,7 @@ impl<'a> VariantHandler for VCFVariantHandler<'a> {
         _query_ix: usize,
         _ref_seq_ix: usize,
         _query_seq_ix: usize,
-    ) {
-    }
+    ) {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -740,16 +739,15 @@ pub fn detect_variants_in_sub_paths(
     let allele_map = allele_groups_in_path_ranges(&sub_path_ranges, path_data);
     // for each ref in our ranges at this site
     sub_path_ranges.iter().for_each(|&(path_ix, (from, to))| {
-        let path_name = path_data.path_names.get(path_ix).unwrap();
-        if is_ref_path(path_name.as_ref()) {
+        let ref_name = path_data.path_names.get(path_ix).unwrap();
+
+        if is_ref_path(ref_name.as_ref()) {
             // get the hash of the reference
-            let ref_key =
-                path_data.hash_subpath(path_ix, from, to).unwrap();
+            let ref_key = path_data.hash_subpath(path_ix, from, to).unwrap();
             let ref_path = path_data.paths.get(path_ix).unwrap();
             let ref_pos = ref_path[from].1;
-            let ref_name = path_data.path_names.get(path_ix).unwrap();
-            let ref_seq =
-                path_data.subpath_seq(path_ix, from, to).unwrap();
+            let ref_seq = path_data.subpath_seq(path_ix, from, to).unwrap();
+
             let alt_list: Vec<BString> = allele_map
                 .iter()
                 .filter_map(|(hash, alts)| {
@@ -762,11 +760,13 @@ pub fn detect_variants_in_sub_paths(
                 })
                 .map(|x| x.unwrap())
                 .collect();
-	    let id = format!(">{}>{}", from, to);
-	    if !alt_list.is_empty() {
-		let alts = bstr::join(",", alt_list);
-		// collect the alleles for the ref and alternates
-		let vcf = VCFRecord {
+
+            let id = format!(">{}>{}", from, to);
+
+            if !alt_list.is_empty() {
+                let alts = bstr::join(",", alt_list);
+                // collect the alleles for the ref and alternates
+                let vcf = VCFRecord {
                     chromosome: ref_name.clone(),
                     position: ref_pos as i64,
                     id: Some(id.into()),
@@ -777,10 +777,10 @@ pub fn detect_variants_in_sub_paths(
                     info: None,
                     format: None,
                     sample_name: None,
-		};
+                };
 
-		variants.push(vcf);
-	    }
+                variants.push(vcf);
+            }
         }
     });
 
