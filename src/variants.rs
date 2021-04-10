@@ -748,10 +748,16 @@ pub fn detect_variants_in_sub_paths(
             let ref_pos = ref_path[from].1;
             let ref_seq = path_data.subpath_seq(path_ix, from, to).unwrap();
 
+            let mut alt_path_names: Vec<BString> = Vec::new();
+
             let alt_list: Vec<BString> = allele_map
                 .iter()
                 .filter_map(|(hash, alts)| {
                     if *hash != ref_key {
+                        for (q_ix, (q_s, q_e)) in alts.iter() {
+                            alt_path_names.push(path_data.path_names.get(*q_ix).unwrap().clone());
+                        }
+
                         let (q_ix, (q_s, q_e)) = alts[0];
                         Some(path_data.subpath_seq(q_ix, q_s, q_e))
                     } else {
@@ -764,6 +770,7 @@ pub fn detect_variants_in_sub_paths(
             let id = format!(">{}>{}", from, to);
 
             if !alt_list.is_empty() {
+                let alt_path_names_ : BString = bstr::join(",", alt_path_names).into();
                 let alts = bstr::join(",", alt_list);
                 // collect the alleles for the ref and alternates
                 let vcf = VCFRecord {
@@ -774,7 +781,7 @@ pub fn detect_variants_in_sub_paths(
                     alternate: Some(alts.into()),
                     quality: None,
                     filter: None,
-                    info: None,
+                    info: Some(BString::from(format!("PATHS={};", alt_path_names_))),
                     format: None,
                     sample_name: None,
                 };
