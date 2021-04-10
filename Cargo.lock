@@ -302,6 +302,7 @@ dependencies = [
  "gfa 0.10.0",
  "handlegraph",
  "indicatif",
+ "itertools",
  "log",
  "pretty_env_logger",
  "rayon",
@@ -380,6 +381,15 @@ dependencies = [
  "number_prefix",
  "rayon",
  "regex",
+]
+
+[[package]]
+name = "itertools"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37d572918e350e82412fe766d24b15e6682fb2ed2bbe018280caa810397cb319"
+dependencies = [
+ "either",
 ]
 
 [[package]]
@@ -622,12 +632,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26412eb97c6b088a6997e05f69403a802a92d520de2f8e63c2b65f9e0f47c4e8"
 
 [[package]]
-name = "rustc-hash"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
-
-[[package]]
 name = "ryu"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -635,17 +639,17 @@ checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 
 [[package]]
 name = "saboten"
-version = "0.1.2-alpha.2"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86a6f97954172bb463231f593c7d023041b6dd783c88209afdd2178165bebc02"
+checksum = "5900304fd6914730aed623d16d9433af6450b80b4def34f59ad59281cace94df"
 dependencies = [
  "fnv",
+ "fxhash",
  "gfa 0.10.0",
  "indicatif",
  "log",
  "petgraph",
  "rayon",
- "rustc-hash",
  "three-edge-connected",
 ]
 

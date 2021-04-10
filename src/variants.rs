@@ -11,9 +11,11 @@ use gfa::gfa::{Orientation, GFA};
 
 use crate::util::progress_bar;
 
-use gfa::gfa::Orientation::Forward;
 #[allow(unused_imports)]
+use gfa::gfa::Orientation::Forward;
 use log::{debug, info, trace, warn};
+
+use itertools::Itertools;
 
 pub type PathStep = (usize, usize, Orientation);
 
@@ -32,7 +34,13 @@ impl PathData {
 
         let mut state = FnvHasher::default();
 
-        for &(node, _, orient) in &subpath[from..=to] {
+        let (s, e) = if from <= to {
+            (from, to)
+        } else {
+            (to, from)
+        };
+
+        for &(node, _, orient) in &subpath[s..=e] {
             let seq = self.segment_map.get(&node)?.as_slice();
 
             if orient.is_reverse() {
@@ -44,6 +52,34 @@ impl PathData {
         }
 
         Some(state.finish())
+    }
+    fn subpath_seq(
+        &self,
+        path: usize,
+        from: usize,
+        to: usize,
+    ) -> Option<BString> {
+        let subpath = self.paths.get(path)?;
+
+        let mut seq: BString = "".into();
+
+        let (s, e) = if from <= to {
+            (from, to)
+        } else {
+            (to, from)
+        };
+
+        for &(node, _, orient) in &subpath[s..=e] {
+            let node_seq = self.segment_map.get(&node)?.as_slice();
+
+            if orient.is_reverse() {
+                seq.extend(handlegraph::util::dna::rev_comp_iter(node_seq));
+            } else {
+                seq.extend(node_seq);
+            }
+        }
+
+        Some(seq)
     }
 }
 
@@ -491,8 +527,7 @@ impl<'a> VariantHandler for VCFVariantHandler<'a> {
         _query_ix: usize,
         _ref_seq_ix: usize,
         _query_seq_ix: usize,
-    ) {
-    }
+    ) {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -648,6 +683,37 @@ fn path_data_sub_path_ranges(
     Some(sub_path_ranges)
 }
 
+fn allele_groups_in_path_ranges(
+    path_ranges: &Vec<(usize, (usize, usize))>,
+    path_data: &PathData,
+) -> FnvHashMap<u64, Vec<(usize, (usize, usize))>> {
+    let mut allele_groups: FnvHashMap<u64, Vec<(usize, (usize, usize))>> =
+        FnvHashMap::default();
+    allele_groups.extend(
+        path_ranges
+            .iter()
+            .map(|&(path, (from, to))| {
+                (
+                    path_data.hash_subpath(path, from, to).unwrap(),
+                    (path, (from, to)),
+                )
+            })
+            .sorted()
+            .group_by(|&(hash, _)| hash)
+            .into_iter()
+            .map(|(hash, group)| {
+                (
+                    hash,
+                    group
+                        .into_iter()
+                        .map(|(_, (p, (s, e)))| (p, (s, e)))
+                        .collect(),
+                )
+            }),
+    );
+    allele_groups
+}
+
 pub fn detect_variants_in_sub_paths(
     variant_config: &VariantConfig,
     path_data: &PathData,
@@ -655,9 +721,8 @@ pub fn detect_variants_in_sub_paths(
     path_indices: &FnvHashMap<u64, FnvHashMap<usize, usize>>,
     from: u64,
     to: u64,
-) -> Option<FnvHashMap<BString, FnvHashMap<VariantKey, FnvHashSet<Variant>>>> {
-    let mut variants: FnvHashMap<BString, FnvHashMap<_, FnvHashSet<_>>> =
-        FnvHashMap::default();
+) -> Option<Vec<VCFRecord>> {
+    //FnvHashMap<BString, FnvHashMap<VariantKey, FnvHashSet<Variant>>>> {
 
     let sub_path_ranges =
         path_data_sub_path_ranges(path_data, path_indices, from, to)?;
@@ -670,97 +735,61 @@ pub fn detect_variants_in_sub_paths(
         }
     };
 
-    let mut query_path_ranges = sub_path_ranges.clone();
+    let mut variants = Vec::new();
+    let allele_map = allele_groups_in_path_ranges(&sub_path_ranges, path_data);
+    // for each ref in our ranges at this site
+    sub_path_ranges.iter().for_each(|&(path_ix, (from, to))| {
+        let ref_name = path_data.path_names.get(path_ix).unwrap();
 
-    query_path_ranges.sort_by(|&(x_ix, (x0, x1)), &(y_ix, (y0, y1))| {
-        let x = path_data.paths.get(x_ix).unwrap();
-        let y = path_data.paths.get(y_ix).unwrap();
+        if is_ref_path(ref_name.as_ref()) {
+            // get the hash of the reference
+            let ref_key = path_data.hash_subpath(path_ix, from, to).unwrap();
+            let ref_path = path_data.paths.get(path_ix).unwrap();
+            let ref_pos = ref_path[from].1;
+            let ref_seq = path_data.subpath_seq(path_ix, from, to).unwrap();
 
-        let xa = x0.min(x1);
-        let xb = x0.max(x1);
+            let mut alt_path_names: Vec<BString> = Vec::new();
 
-        let ya = y0.min(y1);
-        let yb = y0.max(y1);
+            let alt_list: Vec<BString> = allele_map
+                .iter()
+                .filter_map(|(hash, alts)| {
+                    if *hash != ref_key {
+                        for (q_ix, (q_s, q_e)) in alts.iter() {
+                            alt_path_names.push(path_data.path_names.get(*q_ix).unwrap().clone());
+                        }
 
-        let xs = &x[xa..=xb];
-        let ys = &y[ya..=yb];
-
-        // let xs = &x[x0..=x1];
-        // let ys = &y[y0..=y1];
-
-        xs.cmp(ys)
-    });
-
-    query_path_ranges.dedup_by(
-        |&mut (x_ix, (x0, x1)), &mut (y_ix, (y0, y1))| {
-            let x = path_data.paths.get(x_ix).unwrap();
-            let y = path_data.paths.get(y_ix).unwrap();
-
-            // let xs = &x[x0..=x1];
-            // let ys = &y[y0..=y1];
-
-            let xa = x0.min(x1);
-            let xb = x0.max(x1);
-
-            let ya = y0.min(y1);
-            let yb = y0.max(y1);
-
-            let xs = &x[xa..=xb];
-            let ys = &y[ya..=yb];
-
-            xs == ys
-        },
-    );
-
-    variants.extend(sub_path_ranges.iter().filter_map(
-        |&(ref_ix, (ref_from, ref_to))| {
-            let ref_name = path_data.path_names.get(ref_ix).unwrap();
-            if !is_ref_path(ref_name.as_ref()) {
-                return None;
-            }
-
-            let ref_path = path_data.paths.get(ref_ix).unwrap();
-            let ref_orient = sub_path_edge_orient(ref_path);
-
-            let mut ref_map: FnvHashMap<VariantKey, FnvHashSet<_>> =
-                FnvHashMap::default();
-
-            for &(query_ix, (query_from, query_to)) in query_path_ranges.iter()
-            {
-                let query_name = path_data.path_names.get(query_ix)?;
-                let query_path = path_data.paths.get(query_ix).unwrap();
-
-                let query_orient = sub_path_edge_orient(query_path);
-
-                if ref_name != query_name
-                    && !variant_config.ignore_path(ref_orient, query_orient)
-                {
-                    let mut handler = VCFVariantHandler::new(
-                        &path_data.segment_map,
-                        ref_name,
-                        ref_path,
-                        query_path,
-                    );
-
-                    detect_variants_against_ref_ranges(
-                        &path_data.segment_map,
-                        ref_path,
-                        query_path,
-                        (ref_from, ref_to),
-                        (query_from, query_to),
-                        &mut handler,
-                    );
-
-                    for (var_key, var_set) in handler.variants {
-                        ref_map.entry(var_key).or_default().extend(var_set);
+                        let (q_ix, (q_s, q_e)) = alts[0];
+                        Some(path_data.subpath_seq(q_ix, q_s, q_e))
+                    } else {
+                        None
                     }
-                }
-            }
+                })
+                .map(|x| x.unwrap())
+                .collect();
 
-            let ref_name: BString = ref_name.clone();
-            Some((ref_name, ref_map))
-        },
-    ));
+            let id = format!(">{}>{}", from, to);
+
+            if !alt_list.is_empty() {
+                let alt_path_names_ : BString = bstr::join(",", alt_path_names).into();
+                let alts = bstr::join(",", alt_list);
+                // collect the alleles for the ref and alternates
+                let vcf = VCFRecord {
+                    chromosome: ref_name.clone(),
+                    position: ref_pos as i64,
+                    id: Some(id.into()),
+                    reference: ref_seq,
+                    alternate: Some(alts.into()),
+                    quality: None,
+                    filter: None,
+                    info: Some(BString::from(format!("PATHS={};", alt_path_names_))),
+                    format: None,
+                    sample_name: None,
+                };
+
+                variants.push(vcf);
+            }
+        }
+    });
 
     Some(variants)
 }
