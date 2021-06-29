@@ -26,8 +26,8 @@ pretty_env_logger = "0.4"
 indicatif = { version = "0.15", features = ["rayon"] }
 
 gfa = { version = "0.10", features = ["serde1"] }
-handlegraph = "0.7.0-alpha.2"
-saboten = { version = "0.1.2-alpha.2", features = ["progress_bars"] }
+handlegraph = "0.7.0-alpha.7"
+saboten = { version = "0.1.2-alpha.3", features = ["progress_bars"] }
 # saboten = { path = "../saboten", features = ["progress_bars"] }
 
 
